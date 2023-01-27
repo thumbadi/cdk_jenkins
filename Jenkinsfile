@@ -8,7 +8,7 @@ pipeline {
                       
                           sh '''
                           PATH=/usr/local/bin/:$PATH
-                          JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-11.0.13.jdk/Contents/Home
+                          JAVA_HOME=/usr/bin/java
                           cdk bootstrap
                           
                           '''
@@ -25,7 +25,7 @@ pipeline {
                       
                           sh '''
                           PATH=/usr/local/bin/:$PATH
-                          JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-11.0.13.jdk/Contents/Home
+                          JAVA_HOME=/usr/bin/java
                           cdk synth
                           '''
                     
@@ -40,7 +40,7 @@ pipeline {
                       
                           sh '''
                           PATH=/usr/local/bin/:$PATH
-                          JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-11.0.13.jdk/Contents/Home
+                          JAVA_HOME=/usr/bin/java
                           cdk deploy --require-approval=never
                           '''
                     

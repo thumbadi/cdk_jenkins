@@ -11,7 +11,7 @@ public class CdkJavaApp {
 
         new CdkJavaStack(app, "CdkJavaStack", StackProps.builder()
                 .env(Environment.builder()
-                        .account("080266302756")
+                        .account("803625985944")
                         .region("us-east-1")
                         .build())
 

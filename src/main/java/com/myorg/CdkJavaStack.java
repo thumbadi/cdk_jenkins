@@ -27,7 +27,7 @@ public class CdkJavaStack extends Stack {
         ArrayList<CfnUser> cfnusers  = new ArrayList<CfnUser>();
         
         //System.out.print(groups);
-        /*
+        
         Bucket bucket = Bucket.Builder.create(this, "S3Bucket")
                                       .bucketName(cf.s3_bucket)
                                       .build();
@@ -43,7 +43,7 @@ public class CdkJavaStack extends Stack {
                          .resources(List.of(bucket.getBucketArn(),bucket.getBucketArn()+"/*"))
                          .build()
         );
-        */
+        
         
         // create groups
         for (int i = 0 ;  i < groups.size() ; i++){

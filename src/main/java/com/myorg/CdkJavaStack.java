@@ -61,11 +61,26 @@ public class CdkJavaStack extends Stack {
                                                  .resources(List.of("*"))
                                                  .build()))
                                                  .build();
+            
+            PolicyDocument group_assumerole = PolicyDocument.Builder.create()
+                                                 .statements(List.of(PolicyStatement.Builder.create()
+                                                 .effect(Effect.ALLOW)
+                                                 .actions(List.of("sts:AssumeRole"))
+                                                 .resources(List.of(role.getRoleArn()))
+                                                 .build()))
+                                                 .build();
                                      
-            CfnGroup.PolicyProperty policyProperty = CfnGroup.PolicyProperty.builder()
+            CfnGroup.PolicyProperty policyproperty = CfnGroup.PolicyProperty.builder()
                                  .policyDocument(policy)
-                                 .policyName("policyName"+groupname)
+                                 .policyName("policy"+groupname)
                                  .build();
+                                 
+            CfnGroup.PolicyProperty assumerolepolicy = CfnGroup.PolicyProperty.builder()
+                                 .policyDocument(group_assumerole)
+                                 .policyName("assume"+cf.role_name)
+                                 .build();                     
+                                      
+           
                                  
             HashMap<String, Object> item = groups.get(i);
             
@@ -74,7 +89,7 @@ public class CdkJavaStack extends Stack {
                 cfngroup.setManagedPolicyArns(managedpolicies);
             }
                                            
-            cfngroup.setPolicies(List.of(policyProperty));
+            cfngroup.setPolicies(List.of(policyproperty, assumerolepolicy));
             cfngroups.add(cfngroup);           
             
         }

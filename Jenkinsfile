@@ -8,6 +8,7 @@ pipeline {
                       
                           sh '''
                           PATH=/usr/local/bin/:$PATH
+                          JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home/bin
                           cdk bootstrap
                           
                           '''

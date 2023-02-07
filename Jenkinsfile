@@ -7,8 +7,7 @@ pipeline {
                 withAWS(credentials: 'jenkins-cdk', region: 'us-east-2') {
                       
                           sh '''
-                     
-                          PATH=/usr/local/bin/:$PATH:$JAVA_HOME
+                        
                           cdk bootstrap
                           
                           '''

@@ -7,7 +7,7 @@ pipeline {
                 withAWS(credentials: 'jenkins-cdk', region: 'us-east-2') {
                       
                           sh '''
-                        
+                          PATH=/usr/local/bin/:$PATH
                           cdk bootstrap
                           
                           '''
@@ -23,7 +23,7 @@ pipeline {
                 withAWS(credentials: 'jenkins-cdk', region: 'us-east-2') {
                       
                           sh '''
-                          PATH=/usr/local/bin/:$PATH:$JAVA_HOME
+                          PATH=/usr/local/bin/:$PATH
                           cdk synth
                           '''
                     
@@ -37,7 +37,7 @@ pipeline {
                 withAWS(credentials: 'jenkins-cdk', region: 'us-east-2') {
                       
                           sh '''
-                          PATH=/usr/local/bin/:$PATH:$JAVA_HOME
+                          PATH=/usr/local/bin/:$PATH
                           cdk deploy --require-approval=never
                           '''
                     

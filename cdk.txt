@@ -5,7 +5,8 @@
 from awsglue.context import GlueContext
 from awsglue.job import Job
 from pyspark.context import SparkContext
-from pyspark.sql.types import StringType
+from pyspark.sql.functions import udf
+from pyspark.sql.types import StringType, FloatType
 from datetime import datetime
 
 
@@ -43,17 +44,19 @@ def main(username, password):
             ("nscc_control_number", "string", "nscc_control_number", "string"),
             ("cusip_fund_subfund", "string", "cusip_fund_subfund", "string"),
             ("amount", "double", "amount", "double"),
-            ("indicator", "double", "indicator", "double")
+            ("indicator", "int", "indicator", "int")
         ]) \
         .apply_fields([("nscc_control_number", StringType(), lambda x: split_nscc_control_number(x)),
-                       ("cusip_fund_subfund", StringType(), lambda x: split_cusip_fund_subfund(x))
-                       ("amount_check", StringType(), lambda x: "Positive" if (x["amount"] / 100) > x["indicator"] else "Negative")])
+                       ("cusip_fund_subfund", StringType(), lambda x: split_cusip_fund_subfund(x))])
     
     #New Functionality added in the above lines
     #if the amount/100 factor is greater than the indicator, 
     #Positive will be inserted into the column 'amount_check' of the formatted table
     #else Negative will be inserted
 
+    amount_udf = udf(lambda amount, indicator: amount / 100 if indicator == 2 else -1*(amount / 100), FloatType())
+    dynamic_frame_mapped = dynamic_frame_mapped \
+        .withColumn("Amount", amount_udf("Amount", "Indicator"))
 
     # Convert the DynamicFrame to a DataFrame
     data_frame = dynamic_frame_mapped.toDF()

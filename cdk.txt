@@ -1,3 +1,97 @@
 1.AWS CDK allows developers to define their infrastructure using familiar programming languages such as TypeScript, Python, Java, and C#, reducing the learning curve and increasing developer productivity.
 2. AWS CDK can help reduce costs by automating infrastructure management tasks and making it easier to deploy and scale infrastructure
 3. AWS CDK provides a higher level of abstraction compared to low-level AWS CloudFormation templates. This makes it easier to write and understand
+
+from awsglue.context import GlueContext
+from awsglue.job import Job
+from pyspark.context import SparkContext
+from pyspark.sql.types import StringType
+from datetime import datetime
+
+
+source_table = 'sourceTable'
+target_table = 'TargetTable'
+
+# Pass username and password as arguments to the function
+def main(username, password):
+    # Initialize the GlueContext
+    glueContext = GlueContext(SparkContext.getOrCreate())
+
+    # Create a connection to the Postgres database using JDBC
+    jdbcUrl = f"jdbc:postgresql://<hostname>:5432/<database_name>"
+    connectionProperties = {
+        "user": username,
+        "password": password,
+        "driver": "org.postgresql.Driver"
+    }
+
+    # Load the data from the source table
+    dynamic_frame = glueContext.create_dynamic_frame.from_options(
+        connection_type="jdbc",
+        connection_options={
+            "url": jdbcUrl,
+            "dbtable": source_table,
+            "user": username,
+            "password": password
+        },
+        format="postgresql"
+    )
+
+    # Map the source columns to the target columns and split the values where required
+    dynamic_frame_mapped = dynamic_frame \
+        .apply_mapping([
+            ("nscc_control_number", "string", "nscc_control_number", "string"),
+            ("cusip_fund_subfund", "string", "cusip_fund_subfund", "string"),
+            ("amount", "double", "amount", "double"),
+            ("indicator", "double", "indicator", "double")
+        ]) \
+        .apply_fields([("nscc_control_number", StringType(), lambda x: split_nscc_control_number(x)),
+                       ("cusip_fund_subfund", StringType(), lambda x: split_cusip_fund_subfund(x))
+                       ("amount_check", StringType(), lambda x: "Positive" if (x["amount"] / 100) > x["indicator"] else "Negative")])
+    
+    #New Functionality added in the above lines
+    #if the amount/100 factor is greater than the indicator, 
+    #Positive will be inserted into the column 'amount_check' of the formatted table
+    #else Negative will be inserted
+
+
+    # Convert the DynamicFrame to a DataFrame
+    data_frame = dynamic_frame_mapped.toDF()
+
+    # Write the formatted data to the target table
+    data_frame.write.jdbc(
+        url=jdbcUrl,
+        table=target_table,
+        mode="overwrite",
+        properties=connectionProperties
+    )
+
+    # Create a Glue job to run this script
+    job = Job(glueContext)
+    job.init("myjob")
+
+    # Commit the job
+    job.commit()
+
+    print("Data migration complete")
+
+# Define functions to split the nscc_control_number and cusip_fund_subfund columns
+def split_nscc_control_number(nscc_control_number):
+    first_column = nscc_control_number[:4]
+    second_column = julian_to_date(nscc_control_number[4:10])
+    third_column = nscc_control_number[10:]
+    return f"{first_column},{second_column},{third_column}"
+
+def split_cusip_fund_subfund(cusip_fund_subfund):
+    first_column = cusip_fund_subfund[:9]
+    second_column = cusip_fund_subfund[9:14]
+    third_column = cusip_fund_subfund[14:]
+    return f"{first_column},{second_column},{third_column}"
+
+def julian_to_date(julian_date):
+    year = "20" + julian_date[:2]
+    days = int(julian_date[2:])
+    date = datetime.datetime(int(year), 1, 1) + datetime.timedelta(days - 1)
+    return str(date.date())
+
+main("username","password")

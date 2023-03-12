@@ -60,3 +60,37 @@ aws configure
 ```
 python -m unittest unit_test.py
 ```
+
+import unittest
+from awsglue.utils import getResolvedOptions
+from awsglue.context import GlueContext
+from pyspark.context import SparkContext
+from pyspark.sql.session import SparkSession
+
+class TestGlueJob(unittest.TestCase):
+    
+    def setUp(self):
+        args = getResolvedOptions(sys.argv, ['JOB_NAME'])
+        sc = SparkContext()
+        self.glueContext = GlueContext(sc)
+        self.sparkSession = SparkSession.builder.appName(args['JOB_NAME']).getOrCreate()
+        self.job = MyGlueJob(self.glueContext)
+        
+    def test_glue_job(self):
+        input_data = [("foo", 1), ("bar", 2), ("baz", 3)]
+        input_df = self.sparkSession.createDataFrame(input_data, ["word", "count"])
+        expected_output_data = [("foo", 3), ("bar", 4), ("baz", 5)]
+        expected_output_df = self.sparkSession.createDataFrame(expected_output_data, ["word", "count"])
+        
+        output_df = self.job.run(input_df)
+        
+        self.assertEqual(output_df.collect(), expected_output_df.collect())
+
+class MyGlueJob:
+    
+    def __init__(self, glueContext):
+        self.glueContext = glueContext
+    
+    def run(self, input_df):
+        return input_df.withColumn("count", input_df["count"] + 2)
+

@@ -1,96 +1,177 @@
-import unittest
+import sys
+import os
 import boto3
-
-class TestGlueJob(unittest.TestCase):
-    
-    def setUp(self):
-        self.glue = boto3.client('glue')
-        self.job_name = 'my_glue_job'
-    
-    def test_glue_job_success(self):
-        response = self.glue.start_job_run(
-            JobName=self.job_name
-        )
-        job_run_id = response['JobRunId']
-        
-        status = None
-        while status not in ['SUCCEEDED', 'FAILED']:
-            response = self.glue.get_job_run(
-                JobName=self.job_name,
-                RunId=job_run_id
-            )
-            status = response['JobRun']['JobRunState']
-        
-        self.assertEqual(status, 'SUCCEEDED')
-    
-    def test_glue_job_failure(self):
-        response = self.glue.start_job_run(
-            JobName=self.job_name
-        )
-        job_run_id = response['JobRunId']
-        
-        status = None
-        while status not in ['SUCCEEDED', 'FAILED']:
-            response = self.glue.get_job_run(
-                JobName=self.job_name,
-                RunId=job_run_id
-            )
-            status = response['JobRun']['JobRunState']
-        
-        self.assertEqual(status, 'FAILED')
-
-
-
--------------
-
-# install unittest and boto3 python packages
-```
-pip install unittest
-pip install boto3
-```
-# configure the aws credentials
-```
-aws configure
-```
-
-# change the name of your aws glue job on the py file 
-
-
-# run the below command to test that
-```
-python -m unittest unit_test.py
-```
-
-import unittest
+import json
+import zipfile
+from awsglue.transforms import *
 from awsglue.utils import getResolvedOptions
+from awsglue.job import Job
 from awsglue.context import GlueContext
+from pyspark import SparkContext, SparkConf, SQLContext
 from pyspark.context import SparkContext
-from pyspark.sql.session import SparkSession
+from pyspark.sql import SparkSession, SQLContext, Row
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+from botocore.config import Config
+from datetime import datetime, date, timedelta
+from utils.raw_stg_load_utils import get_pg_jdbc_connection, get_ssm_param_value, snspublish, execute_query, join_oci_lookup_key
+#import psycopg2
 
-class TestGlueJob(unittest.TestCase):
-    
-    def setUp(self):
-        args = getResolvedOptions(sys.argv, ['JOB_NAME'])
-        sc = SparkContext()
-        self.glueContext = GlueContext(sc)
-        self.sparkSession = SparkSession.builder.appName(args['JOB_NAME']).getOrCreate()
-        self.job = MyGlueJob(self.glueContext)
-        
-    def test_glue_job(self):
-        input_data = [("foo", 1), ("bar", 2), ("baz", 3)]
-        input_df = self.sparkSession.createDataFrame(input_data, ["word", "count"])
-        expected_output_data = [("foo", 3), ("bar", 4), ("baz", 5)]
-        expected_output_df = self.sparkSession.createDataFrame(expected_output_data, ["word", "count"])
-        
-        output_df = self.job.run(input_df)
-        
-        self.assertEqual(output_df.collect(), expected_output_df.collect())
+# setting up date parameters to convert into date formats
+str_to_date_f = udf(lambda x: x[:4] + '-' + x[4:6] + '-' + x[6:], StringType())
 
-class MyGlueJob:
-    
-    def __init__(self, glueContext):
-        self.glueContext = glueContext
-    
-    def run(self, input_df):
-        return input_df.withColumn("count", input_df["count"] + 2)
+#preval_calculator
+def eval_pre_indicator(x=0, y=0):
+    #Assign return value
+    retval = y
+    #logical check based on indicator
+    if y > 0:
+        if x ==1:
+            retval = (y * -1)                
+    return retval
+eval_pre_indicator_f = udf(eval_pre_indicator, IntegerType())
 
+def extract_2203(args,spark):
+   
+    pg_src_2203_df = execute_query(PgFiliOci2203COMTblSelQry, jdbc_url, conn_properties, spark)
+    
+    check_nonnullable_columns(pg_src_2203_df, cols2203_non_null, spark)
+    
+    # Apply trim to all fields and select as per target table columns
+    pg_src_2203_df = pg_src_2203_df.select((pg_src_2203_df.oci_workflow_id).alias("OCI_WORKFLOW_EVENT_ID"),
+					  trim(pg_src_2203_df.submit_nscc_id).alias("SUBMIT_NSCC_ID"),
+					  trim(pg_src_2203_df.timestamp_submitted).alias("TIMESTAMP_SUBMITTED_SRC"),
+					  trim(pg_src_2203_df.sequence_number).alias("SEQUENCE_NUMBER"),
+					  trim(pg_src_2203_df.timestamp_submitted_julian).alias("TIMESTAMP_SUBMITTED_JULIAN_SRC"),
+					  trim(pg_src_2203_df.cusip_fund_subfund).alias("CUSIP_FUND_SUBFUND"),
+					  trim(pg_src_2203_df.cusip_number).alias("CUSIP_NUMBER"),
+					  trim(pg_src_2203_df.fund_id).alias("FUND_ID"),
+					  trim(pg_src_2203_df.sub_fund_id).alias("SUB_FUND_ID"),
+					  trim(pg_src_2203_df.commission_basis_amount_ind).alias("COMMISSION_BASIS_AMOUNT_IND"),
+					  trim(pg_src_2203_df.commission_basis_amount).alias("COMMISSION_BASIS_AMOUNT_SRC"),
+					  trim(pg_src_2203_df.commission_basis_amount_qual).alias("COMMISSION_BASIS_AMOUNT_QUAL"),
+					  trim(pg_src_2203_df.commission_rate).alias("COMMISSION_RATE_SRC"),
+					  trim(pg_src_2203_df.calculated_comm_amount_ind).alias("CALCULATED_COMM_AMOUNT_IND"),
+					  trim(pg_src_2203_df.calculated_commission_amount).alias("CALCULATED_COMMISSION_AMOUNT_SRC")
+					  )
+    
+    logger.info(f'Successful: Schema output after trim applied on dataframe pg_src_2203_df')
+ 	
+    # # Convert String to Timestamp and Date formats for date fields
+    pg_src_2203_df = pg_src_2203_df.withColumn("TIMESTAMP_SUBMITTED", to_date(str_to_date_f(pg_src_2203_df["TIMESTAMP_SUBMITTED_SRC"]),"yyyy-MM-dd")) \
+                                   .withColumn("TIMESTAMP_SUBMITTED_JULIAN", to_date(str_to_date_f(pg_src_2203_df["TIMESTAMP_SUBMITTED_JULIAN_SRC"]),"yyyy-MM-dd")) \
+                                   .withColumn("COMMISSION_BASIS_AMOUNT",eval_pre_indicator_f(pg_src_2203_df["COMMISSION_BASIS_AMOUNT_IND"],col("COMMISSION_BASIS_AMOUNT_SRC").cast("integer"))/100) \
+                                   .withColumn("CALCULATED_COMMISSION_AMOUNT",eval_pre_indicator_f(pg_src_2203_df["CALCULATED_COMM_AMOUNT_IND"],col("CALCULATED_COMMISSION_AMOUNT_SRC").cast("integer"))/100) \
+                                   .withColumn("COMMISSION_RATE", (pg_src_2203_df["COMMISSION_RATE_SRC"].cast("integer"))/1000000000)
+                                   
+    pg_src_2203_df = pg_src_2203_df.drop("TIMESTAMP_SUBMITTED_SRC","TIMESTAMP_SUBMITTED_JULIAN_SRC","COMMISSION_BASIS_AMOUNT_SRC","CALCULATED_COMMISSION_AMOUNT_SRC","COMMISSION_RATE_SRC","CALCULATED_COMM_AMOUNT_IND","COMMISSION_BASIS_AMOUNT_IND")
+                                   
+                                   
+    insert_records_com_2203(args, pg_src_2203_df)
+    
+# Columns to check for Nullability on Mandatory fields:
+def check_nonnullable_columns(df, null_cols, spark):
+    for col_name in null_cols:
+        if df.filter(isnull(col(col_name))).count() > 0:
+            null_rows = null_rows.withColumn("error_column", col_name)
+            error_df = error_df.union(null_rows)
+            raise ValueError(f'Non-nullable Column {col_name} has null value')
+        else:
+            logger.info(f'Mandatory Column {col_name} has Non-nullable value')
+
+#Function to insert data to employee organization table
+def insert_records_com_2203(args, pg_src_2203_df):
+    pg_tgt_2203_insert_df=pg_src_2203_df
+    cursor.execute("delete from " + temp_2203insert_stgtb)
+    conn.commit()
+    pg_tgt_2203_insert_df.printSchema()
+    pg_tgt_2203_insert_df.show()
+    logger.info(f'Printing pg_tgt_2203_insert_df head:: {pg_tgt_2203_insert_df.head()}')
+    pg_tgt_2203_insert_df.write.mode("append").jdbc(jdbc_url, temp_2203insert_stgtb, properties=conn_properties)
+
+def get_pg_jdbc_connection(args,ssm_pg_dbpwd):
+    jdbc_url = "jdbc:postgresql://" + args['PgFiliOciDbUrl'] + ":" + args['PgFiliOciPort'] + "/" + args['PgFiliOciDbName'] + args['PgFiliSSLMode']
+    conn_properties = {"user": args['PgFiliOciDbUser'], "password": ssm_pg_dbpwd}
+    return jdbc_url, conn_properties
+
+#connect to postgres database
+def get_pg_connection():
+    conn = psycopg2.connect(database=args['PgFiliOciDbName'], user=args['PgFiliOciDbUser'], password=ssm_pg_dbpwd, host=args['PgFiliOciDbUrl'], port=args['PgFiliOciPort'])
+    cursor = conn.cursor()
+    return conn,cursor
+
+#extract all the required libraries
+def psycopg2_lib_extract():
+    print(os.listdir('.'))
+    zip_ref = zipfile.ZipFile('./gluepydeps.zip', 'r')
+    zip_ref.extractall('/tmp/packages')
+    zip_ref.close()
+    sys.path.insert(0, '/tmp/packages')
+
+
+#main execution starts here    
+if __name__ == '__main__':
+    args = getResolvedOptions(sys.argv, ['JOB_NAME','PgFiliOciDbUrl','PgFiliOciDbUser','PgFiliOciDbName','ProxyHost','PgFiliOciPort','StackName','PgFiliSSLMode','AwsEnvName','GlueFailureSns'])    
+    sc = SparkContext.getOrCreate()
+    glueContext = GlueContext(sc)
+    spark = glueContext.spark_session
+    logger = glueContext.get_logger()
+    job = Job(glueContext)
+    job.init(args['JOB_NAME'], args)
+    conn = None
+    cursor = None
+    
+    cols2203_non_null = ['submit_nscc_id','timestamp_submitted','commission_basis_amount','commission_basis_amount_qual','calculated_commission_amount']
+
+    
+    #parameterizing temp stage table names and final tables
+    temp_2203insert_stgtb = "oci_admin.t_2203com_fund_record_stg"
+  
+    PgFiliOci2203COMTblSelQry = '''select distinct wfd.workflow_id as OCI_WORKFLOW_ID,
+                                    substr(wfd.transmission_uid,1,4) as SUBMIT_NSCC_ID,
+                                    substr(wfd.transmission_uid,5,8) as TIMESTAMP_SUBMITTED,
+                                    substr(c2203.nscc_control_number,11,20) as SEQUENCE_NUMBER,
+                                    substr(wfd.transmission_uid,5,8) as TIMESTAMP_SUBMITTED_JULIAN,
+                                    c2203.cusip_fund_id as CUSIP_FUND_SUBFUND,
+                                    nullif(substr(c2203.cusip_fund_id,1,9),'') as CUSIP_NUMBER,
+                                    nullif(substr(c2203.cusip_fund_id,10,14),'') as FUND_ID,
+                                    nullif(substr(c2203.cusip_fund_id,15,19),'') as SUB_FUND_ID,
+                                    c2203.commission_basis_amount_debit_credit_indicator as COMMISSION_BASIS_AMOUNT_IND,
+                                    c2203.commission_basis_amount as COMMISSION_BASIS_AMOUNT,
+                                    c2203.commission_basis_amount_qualifier as COMMISSION_BASIS_AMOUNT_QUAL,
+                                    c2203.commission_rate as COMMISSION_RATE,
+                                    c2203.calculated_commission_amount_debit_credit_indicator as CALCULATED_COMM_AMOUNT_IND,
+                                    c2203.calculated_commission_amount as CALCULATED_COMMISSION_AMOUNT
+                                    from oci_admin.t_2203com_fund_record_raw c2203
+                                    left join oci_admin.t_workflow_details wfd
+                                    on wfd.workflow_id = c2203.workflow_id
+                                    and wfd.header_record_seq_num = c2203.header_record_seq_num
+                                    inner join oci_admin.t_workflow wf
+                                    on wf.workflow_id = wfd.workflow_id
+                                    and wf.workflow_status not in ('COMPLETED','ERROR')
+                                    '''
+    
+    try:
+        psycopg2_lib_extract()
+        import psycopg2
+        ssm_param_path_value = 'FiliOciPg_DB_PWD'
+        #function to fetch connection details from parameter store
+        ssm_pg_dbpwd = get_ssm_param_value(args,ssm_param_path_value)
+        #connecting to postgres database
+        jdbc_url, conn_properties = get_pg_jdbc_connection(args,ssm_pg_dbpwd)
+        conn, cursor = get_pg_connection()
+        #method to extract data for each table
+        extract_2203(args,spark)
+        
+    except Exception as e:
+        logger.info("Started SNS Publish")
+        msg=f"Error: {e}"
+        sub=f"Failure: OCIBatch SNS Notification ({args['AwsEnvName']}) - Glue Job {args['JOB_NAME']}"
+        logger.info(f"Glue job failed with error: {msg}")
+        #snspublish(msg,sub,args['GlueFailureSns'],args['ProxyHost'])
+        raise
+    finally:
+        logger.info("commit and close connection")
+        sc.stop()
+        job.commit()
+        logger.info(f"Ended main glue job")

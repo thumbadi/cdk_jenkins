@@ -48,3 +48,12 @@ def test_str_to_date_f(spark):
     actual_dates = formatted_dates_df.select("formatted_date").rdd.flatMap(lambda x: x).collect()
 
     assert actual_dates == expected_dates
+
+# Columns to check for Nullability on Mandatory fields:
+def check_nonnullable_columns(df, null_cols, spark):
+    for col_name in null_cols:
+        has_null = df.filter(col(col_name).isNull()).take(1)
+        if has_null:
+            raise ValueError(f'Non-nullable Column {col_name} has null value')
+        else:
+            pass

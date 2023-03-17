@@ -1,112 +1,50 @@
-import boto3
-import json
-import zipfile
-import os
-import sys
-import io
-# import pandas as pd
-import logging
-# import psycopg2
-from botocore.config import Config
-from awsglue.transforms import *
-from awsglue.utils import getResolvedOptions
-from awsglue.job import Job
-from awsglue.context import GlueContext
-from pyspark import SparkContext, SparkConf, SQLContext
-from pyspark.context import SparkContext
-from pyspark.sql import SparkSession, SQLContext, Row
-from pyspark.sql.functions import *
-from pyspark.sql.types import *
-from datetime import datetime, date, timedelta
+import pytest
+from pyspark.sql import SparkSession
+from pyspark.sql.types import StringType
+from pyspark.sql.functions import udf, col
+from rawtable import eval_pre_indicator, check_nonnullable_columns, str_to_date_f
 
-# SETUP LOGGING TO CONSOLE and FILE
-logger = logging.getLogger()
-logger.setLevel("INFO")
 
-# function to fetch connection to Postgres using jdbc url
-def get_pg_jdbc_connection(args,ssm_pg_dbpwd):
-    jdbc_url = "jdbc:postgresql://" + args['PgFiliOciDbUrl'] + ":" + args['PgFiliOciPort'] + "/" + args['PgFiliOciDbName'] + args['PgFiliSSLMode']
-    conn_properties = {"user": args['PgFiliOciDbUser'], "password": ssm_pg_dbpwd}
-    return jdbc_url, conn_properties
+@pytest.fixture(scope="module")
+def spark():
+    spark = SparkSession.builder \
+        .appName("pytest") \
+        .master("local[*]") \
+        .getOrCreate()
+    return spark
 
-# function to create spark dataframe based on select query
-def execute_query(query, jdbc_url, conn_properties, spark):
-    subquery_alias = "temp_table"
-    return spark.read.jdbc(url=jdbc_url, table=f"({query}) AS {subquery_alias}", properties=conn_properties)
 
-# function to join with lookup key table
-def join_oci_lookup_key(df, pg_oci_lkp_df, join_column, lkup_val):
-    return df.join(pg_oci_lkp_df, (col(join_column)==col("key")) & (col("name")==lkup_val), "left")
-    
-# function to fetch connection details from parameters store
-def get_ssm_param_value(args,ssm_param_path_value):
-    ssm_param_path = '/' + args['StackName'] + '/' + ssm_param_path_value
-    ssm = boto3.client('ssm', config=Config(proxies={'https': args['ProxyHost'] + ':8000', 'http': args['ProxyHost'] + ':8000'}))
-    response = ssm.get_parameters(
-        Names=[ssm_param_path], WithDecryption=True
-    )
-    for parameter in response['Parameters']:
-        return parameter['Value']
+def test_eval_pre_indicator():
+    assert eval_pre_indicator(1, 10) == -10
+    assert eval_pre_indicator(0, 10) == 10
+    assert eval_pre_indicator(1, 0) == 0
 
-# function to publish SNS Email Notification
-def snspublish(msg,sub,snsarn,proxyHost):
-    client = boto3.client('sns', config=Config(proxies={'https': proxyHost + ':8000', 'http': proxyHost + ':8000'}))
-    response = client.publish(
-        TargetArn=snsarn,
-        Message=msg,
-        Subject=sub
-    ) 
 
-# Columns to check for Nullability on Mandatory fields:
-def check_nonnullable_columns(df, null_cols, spark):
-    for col_name in null_cols:
-        if df.filter(isnull(col(col_name))).count() > 0:
-            null_rows = null_rows.withColumn("error_column", col_name)
-            error_df = error_df.union(null_rows)
-            raise ValueError(f'Non-nullable Column {col_name} has null value')
-        else:
-            logger.info(f'Mandatory Column {col_name} has Non-nullable value')
-    
-# Convert String to Date Type
-def str_to_date(x):
-    return datetime.strptime(x,'%Y%m%d').date() if x is not None else None
+def test_check_nonnullable_columns(spark):
+    data = [("A", 1), ("B", 2), ("C", 3)]
+    schema = ["col1", "col2"]
+    df = spark.createDataFrame(data, schema)
+    cols_non_null = ["col1", "col2"]
 
-# Convert String to Date Type
-def str_to_date2(x):
-    return datetime.strptime(x,'%Y-%m-%d').date() if x is not None else None
+    # Should not raise any exception
+    check_nonnullable_columns(df, cols_non_null, spark)
 
-# Remove Leading Zeroes
-def rmv_lead_zero(x):
-    return x.lstrip('0') if x is not None else None
+    # Should raise an exception
+    data_with_null = [("A", 1), (None, 2), ("C", 3)]
+    df_with_null = spark.createDataFrame(data_with_null, schema)
+    with pytest.raises(ValueError):
+        check_nonnullable_columns(df_with_null, cols_non_null, spark)
 
-# Current Date Timestamp
-def current_datetime():
-    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-# preval_calculator
-def eval_pre_indicator(x=0, y=0):
-    #Assign return value
-    retval = y
-    #logical check based on indicator
-    if y > 0:
-        if x ==1:
-            retval = (y * -1)                
-    return retval
+def test_str_to_date_f(spark):
+    data = [("20220101",), ("20220102",), ("20220103",)]
+    schema = ["date_str"]
+    df = spark.createDataFrame(data, schema)
 
-def parse_string_to_list(non_null_cols_str):
-    try:
-        non_null_cols = list(map(str,non_null_cols_str.split(',')))
-        # tgt_columns = list(map(str,tgt_columns_str.split(',')))
-        # cols = ','.join(list(tgt_columns))
-        return non_null_cols
-    except Exception as error:
-        log.error("Error: %s" % error)
-        raise
+    str_to_date_udf = udf(lambda x: x[:4] + '-' + x[4:6] + '-' + x[6:], StringType())
+    formatted_dates_df = df.withColumn("formatted_date", str_to_date_udf(col("date_str")))
 
-def insert_records_ft(targettblstg, pg_src_ft_df,jdbc_url,conn_properties):
-    pg_tgt_ft_insert_df=pg_src_ft_df
-    pg_tgt_ft_insert_df.printSchema()
-    pg_tgt_ft_insert_df.show()
-    logger.info(f'Printing {targettblstg}_df head:: {pg_tgt_ft_insert_df.head()}')
-    pg_tgt_ft_insert_df.write.mode("append").jdbc(jdbc_url, targettblstg, properties=conn_properties)
-    logger.info(f'Successfully loaded into table: {targettblstg}')
+    expected_dates = ["2022-01-01", "2022-01-02", "2022-01-03"]
+    actual_dates = formatted_dates_df.select("formatted_date").rdd.flatMap(lambda x: x).collect()
+
+    assert actual_dates == expected_dates

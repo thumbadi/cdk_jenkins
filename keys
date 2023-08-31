@@ -6,3 +6,39 @@ public static final String publicKey = // "-----BEGIN PUBLIC KEY-----" +
             + "CGlau4ikOTtvzDownAMHMrfE7q1B6WZQDAQlBmxRQsyKln5DIsKv6xauNsHRgBAK\r\n"
             + "ctUxZG8M4QJIx3S6Aughd3RZC4Ca5Ae9fd8L8mlNYBCrQhOZ7dS0f4at4arlLcaj\r\n"
             + "twIDAQAB";//
+
+
+public void testDecodeAndValidate() throws Exception {
+    String token = "eyJ0eXAiOiJKV1QiLCJub25jZSI6ImVVNWZ0SEFKTEFpb2xiQUJzWkZILU5wMU0tQktYNGp2dk9Qa1lyeFdTNDAiLCJhbGciOiJSUzI1NiIsIng1dCI6Ii1LSTNROW5OUjdiUm9meG1lWm9YcWJIWkdldyIsImtpZCI6Ii1LSTNROW5OUjdiUm9meG1lWm9YcWJIWkdldyJ9.eyJhdWQiOiJodHRwczovL2dyYXBoLm1pY3Jvc29mdC5jb20iLCJpc3MiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC80MzlkZDFiOC03M2I2LTRhZTAtOTAzZC01MjFmNjE1OTE0YjMvIiwiaWF0IjoxNjkzNDg5Mzk4LCJuYmYiOjE2OTM0ODkzOTgsImV4cCI6MTY5MzQ5MzI5OCwiYWlvIjoiRTJGZ1lOaXNVaDN3TFB4ajNScGZZMW5tMDY0OEFBPT0iLCJhcHBfZGlzcGxheW5hbWUiOiJTTUJEb21haW5TZXJ2aWNlc19VQVRfOTkwOCIsImFwcGlkIjoiN2JlOTEwNTQtMjNlMi00NDNmLThmZTQtYzcxNDJlNGRkY2Y2IiwiYXBwaWRhY3IiOiIxIiwiaWRwIjoiaHR0cHM6Ly9zdHMud2luZG93cy5uZXQvNDM5ZGQxYjgtNzNiNi00YWUwLTkwM2QtNTIxZjYxNTkxNGIzLyIsImlkdHlwIjoiYXBwIiwib2lkIjoiYzBjNDE3YzQtODgxNS00OWEzLTkyYWItODY0MjBiMGEyYTY2IiwicmgiOiIwLkFSY0F1TkdkUTdaejRFcVFQVklmWVZrVXN3TUFBQUFBQUFBQXdBQUFBQUFBQUFBWEFBQS4iLCJyb2xlcyI6WyJVc2VyLlJlYWQuQWxsIl0sInN1YiI6ImMwYzQxN2M0LTg4MTUtNDlhMy05MmFiLTg2NDIwYjBhMmE2NiIsInRlbmFudF9yZWdpb25fc2NvcGUiOiJOQSIsInRpZCI6IjQzOWRkMWI4LTczYjYtNGFlMC05MDNkLTUyMWY2MTU5MTRiMyIsInV0aSI6IlpmVldtYzVKdDBxMHFxSWRvLUdSQUEiLCJ2ZXIiOiIxLjAiLCJ3aWRzIjpbIjA5OTdhMWQwLTBkMWQtNGFjYi1iNDA4LWQ1Y2E3MzEyMWU5MCJdLCJ4bXNfdGNkdCI6MTQ1NjMyNTI1OX0.0M34ZUo22X6pYzdoxZXs5hcsp5lUMXJG2My5sgKpMb4gH3rVtb7QiupOGiXRqlb7A6DC9MM1WfaLrt_Uc8nJPC5ak7inYAj-vwvtQN5lroBtM85D8JAFNoc5D_BvmE4FJ5g9t1d7imHgCDMJNIJPbqlxw_-34Z352IHhjbz-EMpLA-wDp3i_sHlKoPnPGTdpOkDEQef35kYbv0HsNCPazJ_AD95uKBSmCbSAqYe6O3A6Iv4n4xx5i6BXcNk-9IAnW9DfCXcymaghNkzTXru3RQpa28BR7Cfdlz7KVHTDM6i849znZWCGnJJk0mAVLsGvNut4-ncMIEcyZM-KdTupJg";
+    String publicKey = "-----BEGIN PUBLIC KEY-----\n" + //
+        "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6S7asUuzq5Q/3U9rbs+P\n" + //
+        "kDVIdjgmtgWreG5qWPsC9xXZKiMV1AiV9LXyqQsAYpCqEDM3XbfmZqGb48yLhb/X\n" + //
+        "qZaKgSYaC/h2DjM7lgrIQAp9902Rr8fUmLN2ivr5tnLxUUOnMOc2SQtr9dgzTONY\n" + //
+        "W5Zu3PwyvAWk5D6ueIUhLtYzpcB+etoNdL3Ir2746KIy/VUsDwAM7dhrqSK8U2xF\n" + //
+        "CGlau4ikOTtvzDownAMHMrfE7q1B6WZQDAQlBmxRQsyKln5DIsKv6xauNsHRgBAK\n" + //
+        "ctUxZG8M4QJIx3S6Aughd3RZC4Ca5Ae9fd8L8mlNYBCrQhOZ7dS0f4at4arlLcaj\n" + //
+        "twIDAQAB\n" + //
+        "-----END PUBLIC KEY-----";
+    DecodedJWT jwt = decodeAndValidate(token, publicKey);
+    System.out.println(jwt.getClaims().toString());
+  }
+
+  public DecodedJWT decodeAndValidate(String token, String publicKey)
+      throws NoSuchAlgorithmException, InvalidKeySpecException {
+    String publicKeyPEM = publicKey
+        .replace("-----BEGIN PUBLIC KEY-----", "")
+        .replaceAll(System.lineSeparator(), "")
+        .replace("-----END PUBLIC KEY-----", "");
+
+    byte[] publicKeyByteArr = Base64.getDecoder().decode(publicKeyPEM);
+    KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+    RSAPublicKey rsaPublicKey = (RSAPublicKey) keyFactory.generatePublic(new X509EncodedKeySpec(publicKeyByteArr));
+
+    Algorithm algorithm = Algorithm.RSA256(rsaPublicKey, null);
+    JWTVerifier verifier = JWT.require(algorithm)
+        .acceptLeeway(6 * 60 * 60 * 1000)
+        .withClaim("iss", "https://sts.windows.net/439dd1b8-73b6-4ae0-903d-521f615914b3/")
+        .build();
+    DecodedJWT jwt = verifier.verify(token);
+    return jwt;
+  }

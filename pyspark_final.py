@@ -3,19 +3,18 @@ import boto3
 import datetime
 from botocore.exceptions import NoCredentialsError
 import json
+from functools import reduce
 from awsglue.transforms import *
-from pyspark.sql import SparkSession
+# from pyspark.sql import SparkSession
 from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
-from pyspark.sql.functions import udf
 from pyspark.sql import Row
-from pyspark.sql.types import StringType
 from awsglue.utils import getResolvedOptions
 from awsglue.dynamicframe import DynamicFrame
 from awsglue.job import Job
-from pyspark.sql.functions import col, date_format, to_date
-from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType, DateType
+from pyspark.sql.functions import col
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType
 
 ## @params: [JOB_NAME]
 args = getResolvedOptions(sys.argv, ['JOB_NAME'])
@@ -25,11 +24,11 @@ glueContext = GlueContext(sc)
 spark = glueContext.spark_session
 job = Job(glueContext)
 job.init(args['JOB_NAME'], args)
-args = getResolvedOptions(sys.argv, ['JOB_NAME', 'S3_INPUT_PATH', 'S3_OUTPUT_PATH', 'SECRET_NAME'])
+args = getResolvedOptions(sys.argv, ['JOB_NAME', 'S3_INPUT_PATH', 'SECRET_NAME'])
 
 # Define input/output paths
 input_path = args['S3_INPUT_PATH']
-output_path = args['S3_OUTPUT_PATH']
+# output_path = args['S3_OUTPUT_PATH']
 secret_name = args['SECRET_NAME'] 
 
 # Function to retrieve PostgreSQL credentials from AWS Secrets Manager
@@ -87,7 +86,7 @@ def split_by_schema(lines, schema):
     for line in lines:
         start_index = 0
         tmp = []
-        print("Testing print line by line reading **************" + str(line))
+        # print("Testing print line by line reading **************" + str(line))
         for column in schema:
             column_name = column['column']
             column_type = column['type']
@@ -129,8 +128,7 @@ def split_by_schema(lines, schema):
                 # For string columns, pad with spaces to match the column length
                 dt_str = str(value.ljust(column_length).strip())
                 value = datetime.datetime.strptime(dt_str,"%Y%m%d").strftime("%Y-%m-%d")
-            tmp.append(value)
-            
+            tmp.append(value)            
     
             # Move the start index to the next column's position
             start_index += column_length
@@ -203,48 +201,40 @@ columns = StructType([
 # from pyspark.sql import Row
 df = spark.createDataFrame(transformed_data, columns)
 
-# Convert the 'yyyyMMdd' string to DateType
-# df = df.withColumn("parsed_date", to_date(col("date_of_service"), "yyyyMMdd"))
-
-# df = df.withColumn("formatted_date", date_format("parsed_date", "yyyy-MM-dd"))
-
-
 # Identify duplicate rows based on 'name' column
-# dup_records = False
-# duplicates = df.groupBy('claim_control_no').count().filter('count > 1')
-# if duplicates.isEmpty == False:
-#     dup_records =True
-#     # Extract rows that have duplicates (based on 'name' column)
-#     duplicate_rows = df.join(duplicates, on='claim_control_no', how='inner')
-#     df_no_duplicates = df.dropDuplicates(['claim_control_no'])
+dup_records = False
+duplicates = df.groupBy('claim_control_no').count().filter('count > 1')
+if duplicates.isEmpty() == False:
+    dup_records = True
+    
+    # Extract rows that have duplicates (based on 'claim_control_no' column)
+    duplicate_rows = df.join(duplicates, on='claim_control_no', how='inner')
+    df_no_duplicates = df.dropDuplicates(['claim_control_no'])
 
+# empty the dataframe after uploaded to postgres
+df.unpersist()
 # Regular expression to check for special characters
-# special_char_pattern = '[^a-zA-Z0-9]'
-
-# Initialize condition for filtering
-# condition = None
+special_char_pattern = '[^a-zA-Z0-9 .-]'
 
 # Loop through all columns and check for special characters
-# for column in df.columns:
-#     # Create condition for each column with special characters
-#     column_condition = col(column).rlike(special_char_pattern)
-    
-#     # Combine the conditions using OR (|)
-#     if condition is None:
-#         condition = column_condition
-#     else:
-#         condition = condition | column_condition
+filter_expr = reduce(
+    lambda a, b: a | b,
+    [col(column).rlike(special_char_pattern) for column in df_no_duplicates.columns]
+)
 # Filter out rows with special characters in any column (invert the condition using ~)  
-# df_no_special_chars = df.filter(~condition)
+df_no_special_chars = df_no_duplicates.filter(~filter_expr)
+df_with_special_chars = df_no_duplicates.filter(filter_expr)
     
 # Convert the DataFrame to a Glue DynamicFrame
 # if dup_records == True:
-#     dynamic_frame = DynamicFrame.fromDF(duplicate_rows, glueContext, "dynamic_frame")
-# # elif condition != None:
-# #     dynamic_frame = DynamicFrame.fromDF(df_no_special_chars, glueContext, "dynamic_frame")
+#     dynamic_frame = DynamicFrame.fromDF(df_no_duplicates, glueContext, "dynamic_frame")
+# elif df_with_special_chars.isEmpty() == False:
+#     dynamic_frame = DynamicFrame.fromDF(df_no_special_chars, glueContext, "dynamic_frame")
 # else:
 #     dynamic_frame = DynamicFrame.fromDF(df, glueContext, "dynamic_frame")
-dynamic_frame = DynamicFrame.fromDF(df, glueContext, "dynamic_frame")   
+dynamic_frame = DynamicFrame.fromDF(df_no_special_chars, glueContext, "dynamic_frame")
+
+
 # Write the data into the PostgreSQL database
 glueContext.write_dynamic_frame.from_options(
     dynamic_frame,
@@ -252,10 +242,11 @@ glueContext.write_dynamic_frame.from_options(
     connection_options=postgres_options
 )
 
+
+
 #move TXT file after processed
 s3_client = boto3.client('s3')
-try:
-    # Copy the file from source to destination
+try:    
     final_dir = "completed"
     err_dir = "error"
     dup_dir = "duplicates"
@@ -264,6 +255,7 @@ try:
     bucket = input_path.split("/")[2]
     # dest_bucket = input_path.split("/")[2]
     # print(f"Copying file from {source_bucket}/{source_key} to {dest_bucket}/{source_key}")
+    # Copy the file from input to completed
     s3_client.copy_object(
         CopySource={'Bucket': bucket, 'Key': f"{input_dir}/{source_key}"},
         Bucket=bucket,
@@ -275,14 +267,14 @@ try:
     s3_client.delete_object(Bucket=bucket, Key=f"{input_dir}/{source_key}")
     
     # print(f"File moved from {source_bucket}/{source_key} to {destination_bucket}/{destination_key} successfully.")
-    
+    dt_today = datetime.datetime.today().strftime("%Y%m%d")
     # Save duplicate rows to a CSV file
-    # if dup_records == True:
-    #     duplicate_rows.coalesce(1).write.csv(f's3://{bucket}/{dup_dir}/duplicates.csv', header=True)
+    if dup_records == True:
+        duplicate_rows.coalesce(1).write.csv(f's3://{bucket}/{dup_dir}/dup_{dt_today}.csv', header=True)
     
     # # Save rows with special characters to a CSV file
-    # if condition is not None:
-    #     rows_with_special_chars.coalesce(1).write.csv(f's3://{bucket}/{err_dir}/special_char.csv', header=True)
+    if df_with_special_chars.isEmpty() == False:
+        df_with_special_chars.coalesce(1).write.csv(f's3://{bucket}/{err_dir}/special_char_{dt_today}.csv', header=True)
      
 except NoCredentialsError:
     print("Credentials not available.")

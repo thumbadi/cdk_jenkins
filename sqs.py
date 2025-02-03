@@ -3,8 +3,8 @@ import boto3
 import json
 import base64
 
-AWS_ACCESS_KEY = "AKIA5V6I7K7SDHB6P3EC"
-AWS_SECRET_KEY = "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"
+AWS_ACCESS_KEY = ""
+AWS_SECRET_KEY = ""
 AWS_REGION = "us-east-1"
 
 def get_secret(secret_name):

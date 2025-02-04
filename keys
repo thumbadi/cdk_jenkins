@@ -63,3 +63,17 @@
 }
     ]
 }
+
+--------------
+
+{
+  "Version" : "2012-10-17",
+  "Statement" : [ {
+    "Effect" : "Allow",
+    "Principal" : {
+      "AWS" : "arn:aws:iam::940482451428:role/pyspark-glue"
+    },
+    "Action" : "secretsmanager:GetSecretValue",
+    "Resource" : "arn:aws:secretsmanager:us-east-1:940482451428:secret:rds!db-1b56c8d7-8b7e-46fa-a7c7-d30322ab4187-*"
+  } ]
+}

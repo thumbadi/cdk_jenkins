@@ -1,79 +1,24 @@
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "VisualEditor0",
-            "Effect": "Allow",
-            "Action": [
-                "secretsmanager:GetRandomPassword",
-                "logs:CreateLogStream",
-                "iam:PassRole",
-                "logs:CreateLogGroup",
-                "logs:PutLogEvents",
-                "logs:ListTagsForResource",
-                "logs:ListLogDeliveries"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "VisualEditor1",
-            "Effect": "Allow",
-            "Action": [
-                "sqs:DeleteMessage",
-                "sqs:StartMessageMoveTask",
-                "sqs:GetQueueUrl",
-                "sqs:CancelMessageMoveTask",
-                "sqs:ChangeMessageVisibility",
-                "sqs:ListMessageMoveTasks",
-                "secretsmanager:DescribeSecret",
-                "sqs:ReceiveMessage",
-                "sqs:SendMessage",
-                "sqs:GetQueueAttributes",
-                "sqs:ListQueueTags",
-                "secretsmanager:ListSecretVersionIds",
-                "secretsmanager:GetResourcePolicy",
-                "secretsmanager:GetSecretValue",
-                "sqs:ListDeadLetterSourceQueues",
-                "sqs:PurgeQueue",
-                "sqs:DeleteQueue",
-                "sqs:CreateQueue",
-                "sqs:SetQueueAttributes"
-            ],
-            "Resource": [
-                "arn:aws:secretsmanager:*:940482451428:secret:rds!db-1b56c8d7-8b7e-46fa-a7c7-d30322ab4187",
-                "arn:aws:sqs:us-east-1:940482451428:postgres-sqs-api"
-            ]
-        },
-        
-        {
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "events:PutRule",
-                "events:DescribeRule",
-                "events:DeleteRule",
-                "events:PutTargets",
-                "events:RemoveTargets"
-            ],
-            "Resource": "*"
-        }
-    ]
-}
-    ]
-}
-
---------------
-
-{
-  "Version" : "2012-10-17",
-  "Statement" : [ {
-    "Effect" : "Allow",
-    "Principal" : {
-      "AWS" : "arn:aws:iam::940482451428:role/pyspark-glue"
-    },
-    "Action" : "secretsmanager:GetSecretValue",
-    "Resource" : "arn:aws:secretsmanager:us-east-1:940482451428:secret:rds!db-1b56c8d7-8b7e-46fa-a7c7-d30322ab4187-*"
-  } ]
-}
+--CREATE TABLE public.demo_loadtest (
+--    record_id VARCHAR(3),
+--    sequence_no INTEGER,
+--    mtf_responsecode VARCHAR(2),
+--    adj_deletioncode VARCHAR(1),
+--    date_of_service VARCHAR(10),
+--    pres_serviceref_no INTEGER,
+--    fill_number INTEGER,
+--    service_providerId_qual VARCHAR(2),
+--    service_provider_id VARCHAR(15),
+--    alter_service_provid_qual VARCHAR(2),
+--    alter_service_provid_id VARCHAR(15),
+--    prescriberId_qual VARCHAR(2),
+--    prescriber_id VARCHAR(35),
+--    filler_1 VARCHAR(40),  -- Assuming 'abn' maps to VARCHAR
+--    product_service_id VARCHAR(40),
+--    qty_dispensed VARCHAR(20),  -- Assuming 10 digits and 3 decimal places
+--    days_supply INTEGER,
+--    indicator VARCHAR(1),
+--    filler_2 VARCHAR(40),
+--    orgi_submit_cont VARCHAR(5),
+--    claim_control_no VARCHAR(40),
+--    card_holder_id VARCHAR(20)
+--);

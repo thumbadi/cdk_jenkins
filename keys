@@ -1,50 +1,92 @@
---CREATE TABLE public.demo_loadtest (
---    record_id VARCHAR(3),
---    sequence_no INTEGER,
---    mtf_responsecode VARCHAR(2),
---    adj_deletioncode VARCHAR(1),
---    date_of_service VARCHAR(10),
---    pres_serviceref_no INTEGER,
---    fill_number INTEGER,
---    service_providerId_qual VARCHAR(2),
---    service_provider_id VARCHAR(15),
---    alter_service_provid_qual VARCHAR(2),
---    alter_service_provid_id VARCHAR(15),
---    prescriberId_qual VARCHAR(2),
---    prescriber_id VARCHAR(35),
---    filler_1 VARCHAR(40),  -- Assuming 'abn' maps to VARCHAR
---    product_service_id VARCHAR(40),
---    qty_dispensed VARCHAR(20),  -- Assuming 10 digits and 3 decimal places
---    days_supply INTEGER,
---    indicator VARCHAR(1),
---    filler_2 VARCHAR(40),
---    orgi_submit_cont VARCHAR(5),
---    claim_control_no VARCHAR(40),
---    card_holder_id VARCHAR(20)
---);
-
-
-CREATE TABLE public.demo_loadtest (
-    record_id VARCHAR(3),
-    sequence_no INTEGER,
-    mtf_responsecode VARCHAR(2),
-    adj_deletioncode VARCHAR(1),
-    date_of_service DATE,
-    pres_serviceref_no INTEGER,
-    fill_number INTEGER,
-    service_providerId_qual VARCHAR(2),
-    service_provider_id VARCHAR(15),
-    alter_service_provid_qual VARCHAR(2),
-    alter_service_provid_id VARCHAR(15),
-    prescriberId_qual VARCHAR(2),
-    prescriber_id VARCHAR(35),
-    filler_1 VARCHAR(40),  -- Assuming 'abn' maps to VARCHAR
-    product_service_id VARCHAR(40),
-    qty_dispensed VARCHAR(20),  -- Assuming 10 digits and 3 decimal places
-    days_supply INTEGER,
-    indicator VARCHAR(1),
-    filler_2 VARCHAR(40),
-    orgi_submit_cont VARCHAR(5),
-    claim_control_no VARCHAR(40),
-    card_holder_id VARCHAR(20)
-);
+{
+    "Statement": [
+        {
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:s3:::hhs-cms-mdrng-mtfdm-dev-glue-assets/*",
+                "arn:aws:s3:::hhs-cms-mdrng-mtfdm-dev-ddps/*"
+            ],
+            "Sid": "S3Access"
+        },
+        {
+            "Action": [
+                "secretsmanager:ListSecretVersionIds",
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:GetResourcePolicy",
+                "secretsmanager:GetRandomPassword",
+                "secretsmanager:DescribeSecret"
+            ],
+            "Effect": "Allow",
+            "Resource": "arn:aws:secretsmanager:us-east-1:194722421913:secret:dev/rds/postgres/app/mtfdm-ASd7HJ",
+            "Sid": "SecretsManagerAccess"
+        },
+        {
+            "Action": [
+                "logs:PutLogEvents",
+                "logs:ListTagsForResource",
+                "logs:ListLogDeliveries",
+                "logs:CreateLogStream",
+                "logs:CreateLogGroup"
+            ],
+            "Effect": "Allow",
+            "Resource": "arn:aws:logs:*:*:*:/aws-glue/*",
+            "Sid": "CloudWatchAccess"
+        },
+        {
+            "Action": "cloudwatch:PutMetricData",
+            "Effect": "Allow",
+            "Resource": "*",
+            "Sid": "CloudWatchMetricAccess"
+        },
+        {
+            "Action": "iam:PassRole",
+            "Effect": "Allow",
+            "Resource": "*",
+            "Sid": "IAMAccess"
+        },
+        {
+            "Action": [
+                "sqs:StartMessageMoveTask",
+                "sqs:SetQueueAttributes",
+                "sqs:SendMessage",
+                "sqs:ReceiveMessage",
+                "sqs:PurgeQueue",
+                "sqs:ListQueueTags",
+                "sqs:ListMessageMoveTasks",
+                "sqs:ListDeadLetterSourceQueues",
+                "sqs:GetQueueUrl",
+                "sqs:GetQueueAttributes",
+                "sqs:DeleteQueue",
+                "sqs:DeleteMessage",
+                "sqs:CreateQueue",
+                "sqs:ChangeMessageVisibility",
+                "sqs:CancelMessageMoveTask",
+                "secretsmanager:ListSecretVersionIds",
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:GetResourcePolicy",
+                "secretsmanager:DescribeSecret"
+            ],
+            "Effect": "Allow",
+            "Resource": "*",
+            "Sid": "SQSAccess"
+        },
+        {
+            "Action": [
+                "events:RemoveTargets",
+                "events:PutTargets",
+                "events:PutRule",
+                "events:DescribeRule",
+                "events:DeleteRule"
+            ],
+            "Effect": "Allow",
+            "Resource": "*",
+            "Sid": "EventBridgeAccess"
+        }
+    ],
+    "Version": "2012-10-17"
+}

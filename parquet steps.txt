@@ -1,4 +1,4 @@
-
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType,DateType
 rdd = spark.read.text("c:/flatfile.txt").rdd
 
 values = [row['value'] for row in rdd.collect()]

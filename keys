@@ -37,3 +37,4 @@ create table filsrvc.error_count (
     ERR_CD9	CHAR(3),
     ERR_CD10 CHAR(3)
     );
+On Valid PDE's, this should be divided by 1000 to get decimal value and should be treated as 9(7)V999

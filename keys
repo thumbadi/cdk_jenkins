@@ -1,92 +1,39 @@
-{
-    "Statement": [
-        {
-            "Action": [
-                "s3:PutObject",
-                "s3:GetObject",
-                "s3:DeleteObject"
-            ],
-            "Effect": "Allow",
-            "Resource": [
-                "arn:aws:s3:::hhs-cms-mdrng-mtfdm-dev-glue-assets/*",
-                "arn:aws:s3:::hhs-cms-mdrng-mtfdm-dev-ddps/*"
-            ],
-            "Sid": "S3Access"
-        },
-        {
-            "Action": [
-                "secretsmanager:ListSecretVersionIds",
-                "secretsmanager:GetSecretValue",
-                "secretsmanager:GetResourcePolicy",
-                "secretsmanager:GetRandomPassword",
-                "secretsmanager:DescribeSecret"
-            ],
-            "Effect": "Allow",
-            "Resource": "arn:aws:secretsmanager:us-east-1:194722421913:secret:dev/rds/postgres/app/mtfdm-ASd7HJ",
-            "Sid": "SecretsManagerAccess"
-        },
-        {
-            "Action": [
-                "logs:PutLogEvents",
-                "logs:ListTagsForResource",
-                "logs:ListLogDeliveries",
-                "logs:CreateLogStream",
-                "logs:CreateLogGroup"
-            ],
-            "Effect": "Allow",
-            "Resource": "arn:aws:logs:*:*:*:/aws-glue/*",
-            "Sid": "CloudWatchAccess"
-        },
-        {
-            "Action": "cloudwatch:PutMetricData",
-            "Effect": "Allow",
-            "Resource": "*",
-            "Sid": "CloudWatchMetricAccess"
-        },
-        {
-            "Action": "iam:PassRole",
-            "Effect": "Allow",
-            "Resource": "*",
-            "Sid": "IAMAccess"
-        },
-        {
-            "Action": [
-                "sqs:StartMessageMoveTask",
-                "sqs:SetQueueAttributes",
-                "sqs:SendMessage",
-                "sqs:ReceiveMessage",
-                "sqs:PurgeQueue",
-                "sqs:ListQueueTags",
-                "sqs:ListMessageMoveTasks",
-                "sqs:ListDeadLetterSourceQueues",
-                "sqs:GetQueueUrl",
-                "sqs:GetQueueAttributes",
-                "sqs:DeleteQueue",
-                "sqs:DeleteMessage",
-                "sqs:CreateQueue",
-                "sqs:ChangeMessageVisibility",
-                "sqs:CancelMessageMoveTask",
-                "secretsmanager:ListSecretVersionIds",
-                "secretsmanager:GetSecretValue",
-                "secretsmanager:GetResourcePolicy",
-                "secretsmanager:DescribeSecret"
-            ],
-            "Effect": "Allow",
-            "Resource": "*",
-            "Sid": "SQSAccess"
-        },
-        {
-            "Action": [
-                "events:RemoveTargets",
-                "events:PutTargets",
-                "events:PutRule",
-                "events:DescribeRule",
-                "events:DeleteRule"
-            ],
-            "Effect": "Allow",
-            "Resource": "*",
-            "Sid": "EventBridgeAccess"
-        }
-    ],
-    "Version": "2012-10-17"
-}
+CREATE TABLE filsrvc.inj_mtf_claim (
+	data_src_cd varchar(1) NULL,
+	REC_TYPE	CHAR(3),
+    PDE_RCVD_DT	CHAR(8),
+    PDE_RCVD_TM	CHAR(6),
+    PKG_AUDT_KEY_ID	INTEGER,
+    ADJSTMT_DLTN_CD	CHAR(1),
+    DOS	CHAR(8),
+    PRES_SRVC_REF_NO CHAR(12),
+    FILL_NUM	CHAR(2),
+    SRVC_PROV_ID_QLFR	CHAR(2),
+    SRVC_PROV_ID	CHAR(15),
+    ALT_SRVC_PROV_ID_QLFR	CHAR(2),
+    ALT_SRVC_PROV_ID	CHAR(15),
+    PHRMCY_SRVC_TYPE_CD	CHAR(2),
+    PRSCRBR_QLFR	CHAR(2),
+    PRSCRBR_ID	CHAR(35),
+    PROD_SRVC_ID	CHAR(40),
+    QTY_DSPNSD	CHAR(10),
+    DAYS_SUPLY	CHAR(3),
+    IND_340B	CHAR(1),
+    SUB_CNTRCT	CHAR(5),
+    CLM_CNTL_NUM	CHAR(40),
+    CARDHLDR_ID	CHAR(20)
+);
+ 
+create table filsrvc.error_count (
+    ERR_REC_CNT	CHAR(2),
+    ERR_CD1	CHAR(3),
+    ERR_CD2	CHAR(3),
+    ERR_CD3	CHAR(3),
+    ERR_CD4	CHAR(3),
+    ERR_CD5	CHAR(3),
+    ERR_CD6	CHAR(3),
+    ERR_CD7	CHAR(3),
+    ERR_CD8	CHAR(3),
+    ERR_CD9	CHAR(3),
+    ERR_CD10 CHAR(3)
+    );

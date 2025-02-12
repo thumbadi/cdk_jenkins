@@ -53,3 +53,26 @@ CREATE TABLE claim.mtf_claim_error (
 	err_cd10 bpchar(3) NULL,
 	CONSTRAINT mtf_claim_error_pk PRIMARY KEY (process_dt,process_id)
 );
+
+with mtf_claim_error_data as (
+INSERT INTO claim.mtf_claim
+(received_dt, received_id, internal_claim_num, xref_internal_claim_num, file_header_ts, mtf_curr_claim_stus_ref_cd,
+medicare_src_of_coverage, src_claim_stus_ref_cd, srvc_dt, rx_srvc_ref_num, srvc_npi_num, ncpdp_id,
+fill_num, src_claim_type_cd, ndc_cd, quantity_dispensed, days_supply, indicator_340b_yn,
+orig_submitting_contract_num, claim_control_num, card_holder_id, prescriber_id, pde_error_cnt, pde_error_cd_1,
+pde_error_cd_2, pde_error_cd_3, pde_error_cd_4, pde_error_cd_5, pde_error_cd_6, pde_error_cd_7,
+pde_error_cd_8, pde_error_cd_9, pde_error_cd_10, insert_user_id, insert_ts, update_user_id,
+update_ts, mtf_claim_stus_ref_cd, product_srvc_id, data_src_cd, pde_rcvd_dt, pde_rcvd_tm,
+pkg_audt_key_id, phrmcy_srvc_type_cd)
+VALUES(current_date, 0, '', '', NULL, 'REJ',
+'', 'ACC', NULL, '', 0, '',
+0, 'A', '', 7805431.077, 0, false,
+'', '', '', '', 0, '',
+'', '', '', '', '', '',
+'', '', '', 0, CURRENT_TIMESTAMP, 0,
+NULL, '', '', '0'::character varying, '', '',
+0, '')
+returning received_dt, received_id, internal_claim_num
+)
+insert into claim.mtf_claim_error (received_dt,received_id,internal_claim_num, err_rec_cnt,err_cd1)
+select received_dt,received_id,internal_claim_num,1,'T1' from mtf_claim_error_data;

@@ -111,3 +111,13 @@ create trigger filesrvc_inj_mtf_claim_bi_trig before
 insert
     on
     filsrvc.inj_mtf_claim for each row execute function filsrvc.inj_mtf_claim_bi_trig_fn()
+
+---------------------------
+
+CREATE SEQUENCE claim.received_id_seq
+	INCREMENT BY 1
+	MINVALUE 1
+	MAXVALUE 99999999
+	START 1
+	CACHE 1
+	CYCLE;

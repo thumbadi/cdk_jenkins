@@ -76,3 +76,37 @@ returning received_dt, received_id, internal_claim_num
 )
 insert into claim.mtf_claim_error (received_dt,received_id,internal_claim_num, err_rec_cnt,err_cd1)
 select received_dt,received_id,internal_claim_num,1,'T1' from mtf_claim_error_data;
+---------------------------------
+
+
+CREATE OR REPLACE FUNCTION filsrvc.inj_mtf_claim_bi_trig_fn()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  icn_julian_dt varchar(5);
+  icn_sequence varchar(8);
+  data_src_cd varchar(1);
+BEGIN
+  -- Populate PK columns
+  NEW.received_id = nextval('claim.received_id_seq');
+  NEW.received_dt = CURRENT_DATE;
+  
+  data_src_cd = '0'; -- This will change to a new column in mtf_claim table, once created
+  icn_julian_dt = to_char(NEW.received_dt,'YYDDD');
+  icn_sequence = lpad(NEW.received_id::varchar,8,'0');
+
+  -- Generate ICN (RR-JulianDt-8 digit sequence - 1st R is data source, 2nd R is 0 for now)
+  NEW.internal_claim_num = data_src_cd||'0'||'-'||icn_julian_dt||'-'||substring(icn_sequence,1,2)||'-'||substring(icn_sequence,3,3)||'-'||substring(icn_sequence,6,3);
+  
+  RETURN NEW;
+END;
+$function$
+;
+
+
+------------------------
+create trigger filesrvc_inj_mtf_claim_bi_trig before
+insert
+    on
+    filsrvc.inj_mtf_claim for each row execute function filsrvc.inj_mtf_claim_bi_trig_fn()

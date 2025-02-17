@@ -121,3 +121,6 @@ CREATE SEQUENCE claim.received_id_seq
 	START 1
 	CACHE 1
 	CYCLE;
+
+
+Error Category: QUERY_ERROR; Failed Line Number: 327; AnalysisException: [UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name `data_src_cd` cannot be resolved. Did you mean one of the following? [`ERR_CD10`, `ERR_CD9`, `IND_340B`, `REC_TYPE`, `DAYS_SUPLY`].;

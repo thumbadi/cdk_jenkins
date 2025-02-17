@@ -28,9 +28,9 @@ job = Job(glueContext)
 job.init(args['JOB_NAME'], args)
 
 # Define bucket and folder path
-bucket_name = "pyspark-demo12"
+bucket_name = "hhs-cms-mdrng-mtfdm-dev-glue-assets"
 folder_prefix = "input/"  # Add trailing slash for folders
-secret_name = "rds!db-dcb3ad0e-5246-450e-9f85-44450fccbddb"
+secret_name = "dev/rds/postgres/app/mtfdm"
 # Define input/output paths
 # input_path = args['S3_INPUT_PATH']
 # output_path = args['S3_OUTPUT_PATH']
@@ -40,26 +40,33 @@ def sequence_fetch_update(mode, **kwargs):
     subprocess.call([sys.executable, "-m", "pip", "install", "--user", "psycopg2-binary"])
     import psycopg2
     credentials = get_secret(secret_name)
-    host = "database-1.ch8qiq2uct5o.us-east-1.rds.amazonaws.com"
-    db = "postgres"
-    schema = "public"
+    host = "dev-mtfdm-db-cluster.cluster-cjsa40wuo8ej.us-east-1.rds.amazonaws.com"
+    db = "mtf"
+    schema = "filsrvc"
     user = credentials['username']
     password = credentials['password']
+    print('**********username and password*****')
+    print(user)
+    print(password)
     conn = psycopg2.connect(f"dbname={db} user={user} password={password} host={host}")
     cur = conn.cursor()
-
     if mode == "fetch":
         # cur.execute(f"SELECT nextval('{schema}.received_id_seq') FROM generate_series(1, {record_count})")
         cur.execute(f"SELECT nextval('{schema}.received_id_seq')")
         sequence_ids = [row[0] for row in cur.fetchall()]
+        print("sequence_ids******************")
+        print(sequence_ids)
         cur.execute(f"SELECT setval('{schema}.received_id_seq', {sequence_ids[0]},FALSE)")
         conn.close()
         return sequence_ids[0]
     else:
         last_seq_num = kwargs.get("last_seq")
-        # cur.execute(f"SELECT MAX(received_id) FROM public.mtf_claim")
+        # cur.execute(f"SELECT MAX(received_id) FROM mtf.inj_mtf_claim")
         # max_received_id = cur.fetchone()[0]
+        # cur.execute(f"SELECT nextval('{schema}.received_id_seq')")
         cur.execute(f"SELECT setval('{schema}.received_id_seq', {last_seq_num},FALSE)")
+        print("after last sequence_ids******************")
+        print(last_seq_num)
         conn.commit()
         conn.close()
 
@@ -110,7 +117,7 @@ def get_secret(secret_name):
 
 def send_to_sqs_batch(data):
     # Initialize boto3 SQS client with explicit AWS credentials
-    SQS_QUEUE_URL = "https://sqs.us-east-1.amazonaws.com/585768147395/test-queue"
+    SQS_QUEUE_URL = "https://sqs.us-east-1.amazonaws.com/194722421913/mtf-sqs-queue"
     AWS_REGION = "us-east-1"
 
     sqs = boto3.client('sqs', region_name=AWS_REGION)
@@ -140,7 +147,7 @@ def insert_dynamicDF_postgres(data_df):
 
     # PostgreSQL connection options (from secret)
     postgres_options = {
-        "url": f"jdbc:postgresql://database-1.ch8qiq2uct5o.us-east-1.rds.amazonaws.com:5432/postgres",
+        "url": f"jdbc:postgresql://dev-mtfdm-db-cluster.cluster-cjsa40wuo8ej.us-east-1.rds.amazonaws.com:5432/mtf",
         "dbtable": f"{schema}.{table}",
         "user": credentials['username'],
         "password": credentials['password'],
@@ -170,32 +177,32 @@ fds_mapping = {
 # Define the schema explicitly
 columns_df1 = {
     "data_src_cd" : "string",
-    "REC_TYPE": "string",
-    "PDE_RCVD_DT": "string",
-    "PDE_RCVD_TM": "string",
-    "PKG_AUDT_KEY_ID": "int",
-    "ADJSTMT_DLTN_CD": "string",
-    "DOS": "string",
-    "PRES_SRVC_REF_NO": "string",
-    "FILL_NUM": "string",
-    "SRVC_PROV_ID_QLFR": "string",
-    "SRVC_PROV_ID": "string",
-    "ALT_SRVC_PROV_ID_QLFR": "string",
-    "ALT_SRVC_PROV_ID": "string",
-    "PHRMCY_SRVC_TYPE_CD": "string",
-    "PRSCRBR_QLFR": "string",
-    "PRSCRBR_ID": "string",
-    "PROD_SRVC_ID": "int",
-    "QTY_DSPNSD": "string",
-    "DAYS_SUPLY": "string",
-    "IND_340B": "string",
-    "SUB_CNTRCT": "string",
-    "CLM_CNTL_NUM": "string",
-    "CARDHLDR_ID": "string",
+    "rec_type": "string",
+    "pde_rcvd_dt": "string",
+    "pde_rcvd_tm": "string",
+    "pkg_audt_key_id": "int",
+    "adjstmt_dltn_cd": "string",
+    "dos": "string",
+    "pres_srvc_ref_no": "string",
+    "fill_num": "string",
+    "srvc_prov_id_qlfr": "string",
+    "srvc_prov_id": "string",
+    "alt_srvc_prov_id_qlfr": "string",
+    "alt_srvc_prov_id": "string",
+    "phrmcy_srvc_type_cd": "string",
+    "prscrbr_qlfr": "string",
+    "prscrbr_id": "string",
+    "prod_srvc_id": "int",
+    "qty_dspnsd": "string",
+    "days_suply": "string",
+    "ind_340b": "string",
+    "sub_cntrct": "string",
+    "clm_cntl_num": "string",
+    "cardhldr_id": "string",
     "received_id" : "int",
     "received_dt" : "string",
     "internal_claim_num" : "string",
-    "status_code" : "string"
+    "mtf_curr_claim_stus_ref_cd" : "string"
 }
 
 # Get list of files in the S3 bucket
@@ -285,22 +292,22 @@ for file_path in file_list:
     # last_3_cols = df_no_special_chars[-3:]
 
 # List the tables and insert the data
-    table_list = ["mtf_claim","error_count"]
+    table_list = ["inj_mtf_claim","error_count"]
     split_idx = 22
-    schema = "public"
+    schema = "filsrvc"
     table = None
     for tbl_name in table_list:
         columns = df.columns
-        if tbl_name == "mtf_claim":
+        if tbl_name == "inj_mtf_claim":
             default_value = file_path.split("/")[1].split("_")[0]
             table = tbl_name
             print(f"Processing claim count table")
-
-            # Add new column of data source id and status code in the dataframe
+			
+			# Add new column of data source id and status code in the dataframe
             df_no_special_chars = df_no_special_chars.withColumn("data_src_cd", lit(fds_mapping[default_value]))
-            df_no_special_chars = df_no_special_chars.withColumn("status_code", lit("INJ"))
-
-            # Split the data frame by first 22 columns + last 5 columns
+            df_no_special_chars = df_no_special_chars.withColumn("mtf_curr_claim_stus_ref_cd", lit("INJ"))
+			
+            # Split the data frame by first 22 columns
             temp_df = df_no_special_chars.select(*columns[:split_idx],*columns[-5:])
 
             # convert date columns to proper date format
@@ -310,9 +317,12 @@ for file_path in file_list:
             # format QTY_DSPNSD column properly
             temp_df = temp_df.withColumn("QTY_DSPNSD",lpad(format_string("%07.3f", col("QTY_DSPNSD") / 1000.0),11,"0"))
 
-                        
-            # Change the columns order
+            # Add new column of data source id in the dataframe
             # temp_df = temp_df.withColumn("data_src_cd", lit(fds_mapping[default_value]))
+            
+            # temp_df = temp_df.withColumn("mtf_curr_claim_stus_ref_cd", lit("INJ"))
+            
+            # Change the columns order
             new_column_order = ["data_src_cd"] + [col.lower() for col in temp_df.columns if col != "data_src_cd"]
             temp_df = temp_df.select(new_column_order)
             
@@ -326,7 +336,7 @@ for file_path in file_list:
             print(f"Processing error count table")
             table = tbl_name
             # Split the data frame by error columns
-            temp_df = df_no_special_chars.select(columns[split_idx:]).drop("data_src_cd").drop("status_code")
+            temp_df = df_no_special_chars.select(columns[split_idx:]).drop("data_src_cd").drop("mtf_curr_claim_stus_ref_cd")
             new_column_order = [col.lower() for col in temp_df.columns]
             temp_df = temp_df.select(new_column_order)
             # last_value = temp_df.agg(last("received_id")).collect()[0][0]

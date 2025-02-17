@@ -123,4 +123,4 @@ CREATE SEQUENCE claim.received_id_seq
 	CYCLE;
 
 
-Error Category: QUERY_ERROR; Failed Line Number: 327; AnalysisException: [UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name `data_src_cd` cannot be resolved. Did you mean one of the following? [`ERR_CD10`, `ERR_CD9`, `IND_340B`, `REC_TYPE`, `DAYS_SUPLY`].;
+temp_df = df_no_special_chars.select(['REC_TYPE', 'PDE_RCVD_DT', 'PDE_RCVD_TM', 'PKG_AUDT_KEY_ID', 'ADJSTMT_DLTN_CD', 'DOS', 'PRES_SRVC_REF_NO', 'FILL_NUM', 'SRVC_PROV_ID_QLFR', 'SRVC_PROV_ID', 'ALT_SRVC_PROV_ID_QLFR', 'ALT_SRVC_PROV_ID', 'PHRMCY_SRVC_TYPE_CD', 'PRSCRBR_QLFR', 'PRSCRBR_ID', 'PROD_SRVC_ID', 'QTY_DSPNSD', 'DAYS_SUPLY', 'IND_340B', 'SUB_CNTRCT', 'CLM_CNTL_NUM', 'CARDHLDR_ID', 'received_id', 'received_dt', 'internal_claim_num', 'data_src_cd', 'mtf_curr_claim_stus_ref_cd'])

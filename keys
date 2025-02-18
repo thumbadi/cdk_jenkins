@@ -125,4 +125,7 @@ CREATE SEQUENCE claim.received_id_seq
 new_column_lower = [col.lower() for col in df_no_special_chars.columns]
         df_no_special_chars = df_no_special_chars.select(new_column_lower)
 
+df_no_special_chars = df_no_special_chars.withColumn("pde_rcvd_dt", to_date(col("pde_rcvd_dt").cast("string"), "yyyyMMdd"))
+df_no_special_chars = df_no_special_chars.withColumn("dos", to_date(col("dos").cast("string"), "yyyyMMdd"))
+
 temp_df = df_no_special_chars.select(['REC_TYPE', 'PDE_RCVD_DT', 'PDE_RCVD_TM', 'PKG_AUDT_KEY_ID', 'ADJSTMT_DLTN_CD', 'DOS', 'PRES_SRVC_REF_NO', 'FILL_NUM', 'SRVC_PROV_ID_QLFR', 'SRVC_PROV_ID', 'ALT_SRVC_PROV_ID_QLFR', 'ALT_SRVC_PROV_ID', 'PHRMCY_SRVC_TYPE_CD', 'PRSCRBR_QLFR', 'PRSCRBR_ID', 'PROD_SRVC_ID', 'QTY_DSPNSD', 'DAYS_SUPLY', 'IND_340B', 'SUB_CNTRCT', 'CLM_CNTL_NUM', 'CARDHLDR_ID', 'received_id', 'received_dt', 'internal_claim_num', 'data_src_cd', 'mtf_curr_claim_stus_ref_cd'])

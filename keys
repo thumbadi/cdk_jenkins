@@ -267,3 +267,16 @@ prvdr_ncpdp_stus_340b_sw				varchar(1)
 prvdr_ncpdp_wlk_in_clnc_cd				varchar(2)	
 prvdr_ncpdp_wlk_in_clnc_sw				varchar(1)	
 
+----------------------------------------
+
+	    first_11_columns = temp_df.columns[:11]
+            filtered_df = temp_df.filter(~(sum(col(c).isNull() | (col(c) == "")) == len(first_11_columns) for c in first_11_columns)) 
+            new_column_order = [col.lower() for col in temp_df.columns]
+            filtered_df = filtered_df.select(new_column_order)
+            # last_value = temp_df.agg(last("received_id")).collect()[0][0]
+            response = insert_dynamicDF_postgres(filtered_df)
+
+		new_column_order = [col.lower() for col in temp_df.columns]
+            filtered_df = filtered_df.select(new_column_order)
+            # last_value = temp_df.agg(last("received_id")).collect()[0][0]
+            response = insert_dynamicDF_postgres(filtered_df)

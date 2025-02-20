@@ -1,4 +1,18 @@
-rom pyspark.sql.functions import trim
-first_11_columns = temp_df.columns[:11]
-condition = reduce(lambda a, b: a & b,[(trim(col(c)).isNull()) | (trim(col(c)) == "") for c in first_11_columns])
-filtered_df = temp_df.filter(~condition)
+else:
+            print(f"Processing error count table")
+            table = tbl_name
+            # Split the data frame by error columns
+            temp_df = df_no_special_chars.select(columns[split_idx:]).drop("data_src_cd").drop("mtf_curr_claim_stus_ref_cd")
+            from pyspark.sql.functions import trim
+            first_11_columns = temp_df.columns[:11]
+            condition = reduce(lambda a, b: a & b,[(trim(col(c)).isNull()) | (trim(col(c)) == "") for c in first_11_columns])
+            filtered_df = temp_df.filter(~condition)
+            print('filtered_df****************')
+            print(filtered_df)
+            new_column_order = [col.lower() for col in temp_df.columns]
+            temp_df = temp_df.select(new_column_order)
+            # last_value = temp_df.agg(last("received_id")).collect()[0][0]
+            response = insert_dynamicDF_postgres(temp_df)
+            if response == "success":
+                curr_val = curr_val + seq_count
+    sequence_fetch_update("update",last_seq = curr_val)

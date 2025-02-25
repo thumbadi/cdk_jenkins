@@ -1,8 +1,11 @@
-if filtered_df.count() != 0:
-                new_column_order = [col.lower() for col in temp_df.columns]
-                filtered_df = filtered_df.select(new_column_order)
-                response = insert_dynamicDF_postgres(filtered_df)
-                if response == "success":
-                    curr_val = curr_val + seq_count
-            else:
-                curr_val = curr_val + seq_count
+class GlueContext:
+    def __init__(self, spark_context):
+        self.spark_context = spark_context
+
+    def create_dynamic_frame(self, *args, **kwargs):
+        print("Mock create_dynamic_frame called")
+        return None
+
+class DynamicFrame:
+    def __init__(self, *args, **kwargs):
+        print("Mock DynamicFrame created")

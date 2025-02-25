@@ -4,8 +4,72 @@ class GlueContext:
 
     def create_dynamic_frame(self, *args, **kwargs):
         print("Mock create_dynamic_frame called")
+        return DynamicFrame()
+
+    def getSink(self, *args, **kwargs):
+        print("Mock getSink called")
         return None
+
+    def getSource(self, *args, **kwargs):
+        print("Mock getSource called")
+        return None
+
+-----------
 
 class DynamicFrame:
     def __init__(self, *args, **kwargs):
         print("Mock DynamicFrame created")
+
+    def show(self, *args, **kwargs):
+        print("Mock DynamicFrame show called")
+
+    def printSchema(self, *args, **kwargs):
+        print("Mock DynamicFrame printSchema called")
+
+    def toDF(self, *args, **kwargs):
+        print("Mock DynamicFrame toDF called")
+        return None
+
+----------
+
+class ApplyMapping:
+    def __init__(self, *args, **kwargs):
+        print("Mock ApplyMapping created")
+
+    def apply(self, frame):
+        print("Mock ApplyMapping apply called")
+        return frame
+
+class ResolveChoice:
+    def __init__(self, *args, **kwargs):
+        print("Mock ResolveChoice created")
+
+    def apply(self, frame):
+        print("Mock ResolveChoice apply called")
+        return frame
+
+class DropNullFields:
+    def __init__(self, *args, **kwargs):
+        print("Mock DropNullFields created")
+
+    def apply(self, frame):
+        print("Mock DropNullFields apply called")
+        return frame
+
+-------------
+
+def getResolvedOptions(args, options):
+    print("Mock getResolvedOptions called")
+    return {option: f"mock_value_for_{option}" for option in options}
+
+---------------
+
+class Job:
+    def __init__(self, glue_context):
+        self.glue_context = glue_context
+
+    def init(self, job_name, args):
+        print(f"Mock Job.init called with job_name={job_name}, args={args}")
+
+    def commit(self):
+        print("Mock Job.commit called")

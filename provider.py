@@ -74,7 +74,7 @@ def postgres_query(db,schema,table,**kwargs):
             .option("driver", "org.postgresql.Driver") \
             .load()
         print('df in if**************')
-        print(df)
+        print(df.show())
         return df
     elif key_table =="prvdr_ncpdp_table":
         data = kwargs.get("df")
@@ -123,13 +123,12 @@ for entry in schema_data:
                     print("No records found in the view.")
                     stage_error = True
             elif key == "prvdr_ncpdp_table":
-                #final_df = (
-                #.withColumn("insert_user_id", lit(-1))  # Assign -1 as a constant value
-                #.withColumn("update_user_id", lit(None).cast("int"))  # Assign empty string for update_user_id
-                #.withColumn("update_ts", lit(None).cast("timestamp"))  #Assign empty string for update_ts
-                #)
-                #postgres_query(database,schema,table,df=final_df,key=key)
-                postgres_query(database,schema,table,key=key)
+                final_df = view_df.withColumn("insert_user_id", lit(-1)) \  # Assign -1 as a constant value
+                    .withColumn("update_user_id", lit(None).cast("int")) \  # Assign empty string for update_user_id
+                    .withColumn("update_ts", lit(None).cast("timestamp"))  #Assign empty string for update_ts
+                
+                postgres_query(database,schema,table,df=final_df,key=key)
+                #postgres_query(database,schema,table,key=key)
                 print(f"Total {final_df.count()} records inserted..")
     else:
         break

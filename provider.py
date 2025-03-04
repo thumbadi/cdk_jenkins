@@ -54,11 +54,18 @@ def get_secret(secret_name):
         print(f"Error retrieving secret: {e}")
         raise e
 
-def postgres_query(db,schema,table,*kwargs):
+def postgres_query(db,schema,table,**kwargs):
     key_table = kwargs.get("key")
     host = "dev-mtfdm-db-cluster.cluster-cjsa40wuo8ej.us-east-1.rds.amazonaws.com"
     if key_table == "view_table":
-        query = f"""(SELECT prvdr_ncpdp_id, prvdr_ncpdp_dba_name, \ prvdr_ncpdp_lgl_busns_name, prvdr_ncpdp_store_num, \ prvdr_ncpdp_line_1_adr, prvdr_ncpdp_line_2_adr, \ prvdr_ncpdp_invld_plc_name, prvdr_ncpdp_invld_state_cd, \ prvdr_ncpdp_invld_zip_cd, prvdr_ncpdp_invld_cnty_cd, geo_sk, \ geo_zip4_cd, prvdr_ncpdp_site_tel_num, prvdr_ncpdp_site_extnsn_num, \ prvdr_ncpdp_site_fax_num, prvdr_ncpdp_site_email_adr, \ prvdr_ncpdp_store_open_dt, prvdr_ncpdp_store_clsr_dt, \ prvdr_ncpdp_mlg_line_1_adr, prvdr_ncpdp_mlg_line_2_adr, \ prvdr_ncpdp_invld_mlg_plc_name, prvdr_ncpdp_invld_mlg_state_cd, \ prvdr_ncpdp_invld_mlg_zip_cd, geo_mlg_sk, geo_mlg_zip4_cd, \ prvdr_ncpdp_cntct_1st_name, prvdr_ncpdp_cntct_mdl_name, \ prvdr_ncpdp_cntct_last_name, prvdr_ncpdp_cntct_title_name, \ prvdr_ncpdp_cntct_tel_num, prvdr_ncpdp_cntct_extnsn_num, \ prvdr_ncpdp_cntct_email_adr, prvdr_ncpdp_dspnsr_cls_cd, \ prvdr_ncpdp_1_dspnsr_type_cd, prvdr_ncpdp_2_dspnsr_type_cd, \ prvdr_ncpdp_3_dspnsr_type_cd, prvdr_ncpdp_upin_id, prvdr_ncpdp_npi, \ prvdr_ncpdp_fed_tax_num, prvdr_ncpdp_state_lcns_num, \ prvdr_ncpdp_state_tax_num, prvdr_ncpdp_dlt_dt, \ prvdr_ncpdp_hstry_vrsn_dt, prvdr_ncpdp_deactvtn_cd, \ prvdr_ncpdp_physn_name, prvdr_ncpdp_reinstmt_cd, \ prvdr_ncpdp_reinstmt_dt, prvdr_ncpdp_stus_340b_cd, \ prvdr_ncpdp_stus_340b_sw FROM {schema}.{table})"""
+        query = f"""(SELECT prvdr_ncpdp_id, prvdr_ncpdp_dba_name, prvdr_ncpdp_lgl_busns_name, prvdr_ncpdp_store_num, prvdr_ncpdp_line_1_adr, prvdr_ncpdp_line_2_adr, \
+            prvdr_ncpdp_invld_plc_name, prvdr_ncpdp_invld_state_cd, prvdr_ncpdp_invld_zip_cd, prvdr_ncpdp_invld_cnty_cd, geo_sk, geo_zip4_cd, prvdr_ncpdp_site_tel_num, \
+            prvdr_ncpdp_site_extnsn_num, prvdr_ncpdp_site_fax_num, prvdr_ncpdp_site_email_adr, prvdr_ncpdp_store_open_dt, prvdr_ncpdp_store_clsr_dt, prvdr_ncpdp_mlg_line_1_adr, \
+            prvdr_ncpdp_mlg_line_2_adr, prvdr_ncpdp_invld_mlg_plc_name, prvdr_ncpdp_invld_mlg_state_cd, prvdr_ncpdp_invld_mlg_zip_cd, geo_mlg_sk, geo_mlg_zip4_cd, \
+            prvdr_ncpdp_cntct_1st_name, prvdr_ncpdp_cntct_mdl_name, prvdr_ncpdp_cntct_last_name, prvdr_ncpdp_cntct_title_name, prvdr_ncpdp_cntct_tel_num, prvdr_ncpdp_cntct_extnsn_num, \
+            prvdr_ncpdp_cntct_email_adr, prvdr_ncpdp_dspnsr_cls_cd, prvdr_ncpdp_1_dspnsr_type_cd, prvdr_ncpdp_2_dspnsr_type_cd, prvdr_ncpdp_3_dspnsr_type_cd, prvdr_ncpdp_upin_id, \
+            prvdr_ncpdp_npi, prvdr_ncpdp_fed_tax_num, prvdr_ncpdp_state_lcns_num, prvdr_ncpdp_state_tax_num, prvdr_ncpdp_dlt_dt, prvdr_ncpdp_hstry_vrsn_dt, prvdr_ncpdp_deactvtn_cd, \
+            prvdr_ncpdp_physn_name, prvdr_ncpdp_reinstmt_cd, prvdr_ncpdp_reinstmt_dt, prvdr_ncpdp_stus_340b_cd, prvdr_ncpdp_stus_340b_sw FROM {schema}.{table}) AS temp"""
         df = spark.read.format("jdbc") \
             .option("url", f"jdbc:postgresql://{host}:{5432}/{db}") \
             .option("dbtable", query) \
@@ -66,6 +73,8 @@ def postgres_query(db,schema,table,*kwargs):
             .option("password", credentials['password']) \
             .option("driver", "org.postgresql.Driver") \
             .load()
+        print('df in if**************')
+        print(df)
         return df
     elif key_table =="prvdr_ncpdp_table":
         data = kwargs.get("df")
@@ -101,12 +110,12 @@ stage_error = False
 for entry in schema_data:
     if stage_error == False:
         for key in entry.keys():        
-            database = key["database"]
-            schema = key["schema"]
-            table = key["table_name"]
+            database = entry[key]["database"]
+            schema = entry[key]["schema"]
+            table = entry[key]["table_name"]
     
             if key == "view_table":
-                view_df = postgres_query(database,schema,table)
+                view_df = postgres_query(database,schema,table,key=key)
                 if view_df.isEmpty() == False:
                     print(view_df)
                     continue
@@ -114,12 +123,13 @@ for entry in schema_data:
                     print("No records found in the view.")
                     stage_error = True
             elif key == "prvdr_ncpdp_table":
-                final_df = (postgres_query(database,schema,table)
-                .withColumn("insert_user_id", lit(-1))  # Assign -1 as a constant value
-                .withColumn("update_user_id", lit(None).cast("int"))  # Assign empty string for update_user_id
-                .withColumn("update_ts", lit(None).cast("timestamp"))  #Assign empty string for update_ts
-                )
-                postgres_query(database,schema,table,df=final_df,key=key)
+                #final_df = (
+                #.withColumn("insert_user_id", lit(-1))  # Assign -1 as a constant value
+                #.withColumn("update_user_id", lit(None).cast("int"))  # Assign empty string for update_user_id
+                #.withColumn("update_ts", lit(None).cast("timestamp"))  #Assign empty string for update_ts
+                #)
+                #postgres_query(database,schema,table,df=final_df,key=key)
+                postgres_query(database,schema,table,key=key)
                 print(f"Total {final_df.count()} records inserted..")
     else:
         break

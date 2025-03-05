@@ -1,75 +1,178 @@
-class GlueContext:
-    def __init__(self, spark_context):
-        self.spark_context = spark_context
+<dependencies>
+    <!-- AWS SDK for S3 -->
+    <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>s3</artifactId>
+        <version>2.20.0</version>
+    </dependency>
 
-    def create_dynamic_frame(self, *args, **kwargs):
-        print("Mock create_dynamic_frame called")
-        return DynamicFrame()
+    <!-- Apache Parquet -->
+    <dependency>
+        <groupId>org.apache.parquet</groupId>
+        <artifactId>parquet-avro</artifactId>
+        <version>1.12.3</version>
+    </dependency>
 
-    def getSink(self, *args, **kwargs):
-        print("Mock getSink called")
-        return None
+    <!-- Avro for Parquet -->
+    <dependency>
+        <groupId>org.apache.avro</groupId>
+        <artifactId>avro</artifactId>
+        <version>1.11.1</version>
+    </dependency>
 
-    def getSource(self, *args, **kwargs):
-        print("Mock getSource called")
-        return None
+    <!-- Spring Boot for Web Application -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+        <version>3.1.0</version>
+    </dependency>
 
------------
+    <!-- Logging -->
+    <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-api</artifactId>
+        <version>2.0.7</version>
+    </dependency>
+</dependencies>
 
-class DynamicFrame:
-    def __init__(self, *args, **kwargs):
-        print("Mock DynamicFrame created")
+------------
 
-    def show(self, *args, **kwargs):
-        print("Mock DynamicFrame show called")
+package com.example.parquetreader;
 
-    def printSchema(self, *args, **kwargs):
-        print("Mock DynamicFrame printSchema called")
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-    def toDF(self, *args, **kwargs):
-        print("Mock DynamicFrame toDF called")
-        return None
+@SpringBootApplication
+public class ParquetReaderApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(ParquetReaderApplication.class, args);
+    }
+}
 
-----------
+-----------------------
 
-class ApplyMapping:
-    def __init__(self, *args, **kwargs):
-        print("Mock ApplyMapping created")
+package com.example.parquetreader.controller;
 
-    def apply(self, frame):
-        print("Mock ApplyMapping apply called")
-        return frame
+import com.example.parquetreader.service.ParquetService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-class ResolveChoice:
-    def __init__(self, *args, **kwargs):
-        print("Mock ResolveChoice created")
+import java.util.List;
 
-    def apply(self, frame):
-        print("Mock ResolveChoice apply called")
-        return frame
+@RestController
+public class ParquetController {
 
-class DropNullFields:
-    def __init__(self, *args, **kwargs):
-        print("Mock DropNullFields created")
+    @Autowired
+    private ParquetService parquetService;
 
-    def apply(self, frame):
-        print("Mock DropNullFields apply called")
-        return frame
+    @GetMapping("/read-parquet")
+    public List<String> readParquet(@RequestParam String bucketName, @RequestParam String key) {
+        return parquetService.readParquetFile(bucketName, key);
+    }
+}
 
--------------
+--------------------
 
-def getResolvedOptions(args, options):
-    print("Mock getResolvedOptions called")
-    return {option: f"mock_value_for_{option}" for option in options}
+package com.example.parquetreader.service;
 
----------------
+import org.apache.avro.generic.GenericRecord;
+import org.apache.parquet.avro.AvroParquetReader;
+import org.apache.parquet.hadoop.ParquetReader;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 
-class Job:
-    def __init__(self, glue_context):
-        self.glue_context = glue_context
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 
-    def init(self, job_name, args):
-        print(f"Mock Job.init called with job_name={job_name}, args={args}")
+public class ParquetService {
 
-    def commit(self):
-        print("Mock Job.commit called")
+    private final S3Client s3Client;
+
+    public ParquetService() {
+        this.s3Client = S3Client.create();
+    }
+
+    public List<String> readParquetFile(String bucketName, String key) {
+        List<String> records = new ArrayList<>();
+
+        // Download the Parquet file from S3
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .build();
+
+        try (ResponseInputStream<GetObjectResponse> s3Object = s3Client.getObject(getObjectRequest);
+             InputStream inputStream = s3Object) {
+
+            // Read the Parquet file
+            try (ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(new ParquetInputFile(inputStream)).build()) {
+                GenericRecord record;
+                while ((record = reader.read()) != null) {
+                    records.add(record.toString());
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read Parquet file from S3", e);
+        }
+
+        return records;
+    }
+}
+
+----------------
+
+package com.example.parquetreader.service;
+
+import org.apache.parquet.io.InputFile;
+import org.apache.parquet.io.SeekableInputStream;
+
+import java.io.IOException;
+import java.io.InputStream;
+
+public class ParquetInputFile implements InputFile {
+
+    private final InputStream inputStream;
+
+    public ParquetInputFile(InputStream inputStream) {
+        this.inputStream = inputStream;
+    }
+
+    @Override
+    public long getLength() throws IOException {
+        return inputStream.available();
+    }
+
+    @Override
+    public SeekableInputStream newStream() throws IOException {
+        return new SeekableInputStream() {
+            @Override
+            public long getPos() throws IOException {
+                return 0;
+            }
+
+            @Override
+            public void seek(long newPos) throws IOException {
+                throw new UnsupportedOperationException("Seek not supported");
+            }
+
+            @Override
+            public int read() throws IOException {
+                return inputStream.read();
+            }
+
+            @Override
+            public int read(byte[] b, int off, int len) throws IOException {
+                return inputStream.read(b, off, len);
+            }
+        };
+    }
+}
+
+--------------------
+

@@ -1,0 +1,96 @@
+CREATE TABLE claim.mtf_claim (
+	received_dt date NOT NULL,
+	received_id int8 NOT NULL,
+	internal_claim_num varchar(255) NULL,
+	xref_internal_claim_num varchar(255) NULL,
+	file_header_ts timestamp(6) NULL,
+	mtf_curr_claim_stus_ref_cd varchar(255) NULL,
+	medicare_src_of_coverage varchar(255) NULL,
+	src_claim_stus_ref_cd varchar(255) NULL,
+	srvc_dt date NULL,
+	rx_srvc_ref_num varchar(255) NULL,
+	srvc_npi_num int8 NULL,
+	ncpdp_id varchar(15) NULL,
+	fill_num int4 NULL,
+	src_claim_type_cd varchar(255) NULL,
+	ndc_cd varchar(255) NULL,
+	quantity_dispensed numeric(10, 3) NULL,
+	days_supply int4 NULL,
+	indicator_340b_yn bool NULL,
+	orig_submitting_contract_num varchar(255) NULL,
+	claim_control_num varchar(255) NULL,
+	card_holder_id varchar(255) NULL,
+	prescriber_id varchar(255) NULL,
+	pde_error_cnt int4 NULL,
+	pde_error_cd_1 varchar(255) NULL,
+	pde_error_cd_2 varchar(255) NULL,
+	pde_error_cd_3 varchar(255) NULL,
+	pde_error_cd_4 varchar(255) NULL,
+	pde_error_cd_5 varchar(255) NULL,
+	pde_error_cd_6 varchar(255) NULL,
+	pde_error_cd_7 varchar(255) NULL,
+	pde_error_cd_8 varchar(255) NULL,
+	pde_error_cd_9 varchar(255) NULL,
+	pde_error_cd_10 varchar(255) NULL,
+	insert_user_id int8 NOT NULL,
+	insert_ts timestamp(6) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	update_user_id int8 NULL,
+	update_ts timestamp(6) NULL,
+	data_src_cd varchar(1) DEFAULT '0'::character varying NOT NULL,
+	pde_rcvd_dt varchar(8) NULL,
+	pde_rcvd_tm varchar(6) NULL,
+	pkg_audt_key_id int8 NULL,
+	phrmcy_srvc_type_cd varchar(2) NULL
+)
+
+
+----------------------
+
+CREATE TABLE claim.mtf_claim_de_tpse (
+	received_dt date NOT NULL,
+	received_id int8 NOT NULL,
+	internal_claim_num varchar(255) NULL,
+	de_name varchar(255) NOT NULL,
+	enrollment_stus varchar(255) NOT NULL,
+	pymt_pref varchar(255) NOT NULL,
+	de_id varchar(255) NOT NULL,
+	tpse_id varchar(255) NULL,
+	tpse_name varchar(255) NULL,
+	insert_user_id int8 NOT NULL,
+	insert_ts timestamp(6) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	update_user_id int8 NULL,
+	update_ts timestamp(6) NULL	
+)
+
+
+------------------------------
+
+CREATE TABLE claim.mtf_claim_manufacturer (
+	received_dt date NOT NULL,
+	received_id int8 NOT NULL,
+	internal_claim_num varchar(255) NULL,
+	enrollment_stus varchar(255) NOT NULL,
+	mfr_id varchar(255) NOT NULL,
+	mfr_name varchar(255) NOT NULL,
+	insert_user_id int8 NOT NULL,
+	insert_ts timestamp(6) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	update_user_id int8 NULL,
+	update_ts timestamp(6) NULL
+)
+
+
+-----------------------------------------------
+
+CREATE TABLE claim.mtf_claim_pricing (
+	received_dt date NOT NULL,
+	received_id int8 NOT NULL,
+	internal_claim_num varchar(255) NULL,
+	mfp_amt numeric(38, 2) NULL,
+	wac_src varchar(10) NULL,
+	wac_amt numeric(38, 2) NULL,
+	sdra_amt numeric(38, 2) NULL,
+	insert_user_id int8 NOT NULL,
+	insert_ts timestamp(6) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	update_user_id int8 NULL,
+	update_ts timestamp(6) NULL
+)

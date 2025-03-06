@@ -175,4 +175,13 @@ public class ParquetInputFile implements InputFile {
 }
 
 --------------------
-
+select c.internal_claim_num, c.xref_internal_claim_num, c.received_dt, c.src_claim_type_cd, null mra_error_code,
+c.medicare_src_of_coverage, c.srvc_dt, c.rx_srvc_ref_num, null fill_num, '01' service_provider_id_qualifier, c.srvc_npi_num, null prescriber_id_qualifier,
+c.prescriber_id, c.ndc_cd, c.quantity_dispensed, c.days_supply, c.indicator_340b_yn, c.orig_submitting_contract_num, b.wac_amt, b.mfp_amt, b.sdra_amt, a.pymt_pref,
+null pre_mfp_refund_paid_product, null pre_mfp_refund_paid_amt, null pre_mfp_refund_paid_date, null pre_mfp_refund_paid_qty, null pre_mfp_refund_paid_method,
+null mra_pm_switch, null mfp_refund_amt, null npi_mfp_refund, null qty_of_selected_drug, null amt_mfp_refund_by_mtfpm, null mfp_refund_adj, null mfp_refund_trans,
+d.mfr_id, d.mfr_name
+from claim.mtf_claim c join claim.mtf_claim_de_tpse a on a.received_dt = c.received_dt and a.received_id = c.received_id
+     join  claim.mtf_claim_pricing b on b.received_dt = c.received_dt and b.received_id = c.received_id
+     join  claim.mtf_claim_manufacturer d on d.received_dt = c.received_dt and d.received_id = c.received_id
+where c.mtf_curr_claim_stus_ref_cd = 'MRN';

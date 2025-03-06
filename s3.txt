@@ -1,0 +1,9 @@
+
+
+s3://hhs-cms-mdrng-mtfdm-dev-mfr/mfr_astra_zeneca_ab-13/mrn/outbound/
+
+s3://hhs-cms-mdrng-mtfdm-dev-mfr/mfr_bristol_meyers_squibb-10/mrn/outbound/
+
+s3://hhs-cms-mdrng-mtfdm-dev-mfr/mfr_immunex_corp-11/mrn/outbound/
+
+s3://hhs-cms-mdrng-mtfdm-dev-mfr/mfr_novartis_pharms_corp-12/mrn/outbound/

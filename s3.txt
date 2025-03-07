@@ -9,3 +9,9 @@ s3://hhs-cms-mdrng-mtfdm-dev-mfr/mfr_bristol_meyers_squibb-10/mrn/outbound/
 s3://hhs-cms-mdrng-mtfdm-dev-mfr/mfr_immunex_corp-11/mrn/outbound/
 
 s3://hhs-cms-mdrng-mtfdm-dev-mfr/mfr_novartis_pharms_corp-12/mrn/outbound/
+
+mfg_name_value = row["mfr_name"]
+s3_folder_mfr = mfg_name_value.replace(" ","").replace("-","").lower()
+
+Below: reaplce this file path line
+file_path = f"{s3_folder_mfr}-{id_value}/mrn/outbound/{mfg_name_value}.{ts}.parquet"

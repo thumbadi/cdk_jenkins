@@ -1,4 +1,6 @@
 
+Error Category: PERMISSION_ERROR; Failed Line Number: 120; S3UploadFailedError: Failed to upload /tmp/Bristol Myers Squibb.03072025.1835.parquet to hhs-cms-mdrng-mtfdm-dev-mfr/Bristol Myers Squibb-10/mrn/outbound/Bristol Myers Squibb.03072025.1835.parquet: An error occurred (AccessDenied) when calling the PutObject operation: User: arn:aws:sts::194722421913:assumed-role/mtfdm-glue-iam-role/GlueJobRunnerSession is not authorized to perform: s3:PutObject on resource: "arn:aws:s3:::hhs-cms-mdrng-mtfdm-dev-mfr/Bristol Myers Squibb-10/mrn/outbound/Bristol Myers Squibb.03072025.1835.parquet" because no identity-based policy allows the s3:PutObject action
+
 
 s3://hhs-cms-mdrng-mtfdm-dev-mfr/mfr_astra_zeneca_ab-13/mrn/outbound/
 

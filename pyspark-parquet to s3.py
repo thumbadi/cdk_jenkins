@@ -85,10 +85,10 @@ where c.mtf_curr_claim_stus_ref_cd = 'MRN')
     elif seq == "insert":
 
         df = kwargs.get("dat")
-        df = df[["received_dt", "received_id", "internal_claim_num"]]
+        df = df[["process_dt", "received_id", "mtf_icn"]]
         df["mtf_claim_stus_ref_cd"] = "RCD"
         df["insert_user_id"] = -1
-
+        #df = df.rename(columns={"internal_claim_num": "mtf_icn", "received_dt": "process_dt"})
         insert_query = f"""
             INSERT INTO {schema}.{table} (received_dt, received_id, internal_claim_num, mtf_claim_stus_ref_cd, insert_user_id)
             VALUES (%s, %s, %s, %s, %s)
@@ -184,6 +184,8 @@ for entry in schema_data:
 
                         s3_client = boto3.client('s3')
                         s3_client.upload_file(f"/tmp/{mfg_name_value}.{ts}.parquet", bucket_name, file_path)
+                     #   org_columns = ["internal_claim_num","xref_internal_claim_num","received_dt","src_claim_type_cd","medicare_src_of_coverage","srvc_dt","rx_srvc_ref_num",
+                      #                "fill_num","ncpdp_id","srvc_npi_num","prescriber_id","ndc_cd","quantity_dispensed",]
                         df.columns = df.columns.str.lower()
                         if df_final.empty:
                             df_final = df
@@ -192,8 +194,9 @@ for entry in schema_data:
             elif key == "update":
                 df_final["update_ts"] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
                 df_final["update_user_id"] = -1
-                df_final['received_dt']= df_final['received_dt'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
-                claim_id = df_final[['update_ts','update_user_id','internal_claim_num','received_dt']].values.tolist()
+                #df_final['received_dt']= df_final['received_dt'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
+                df_final['process_dt']= df_final['process_dt'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
+                claim_id = df_final[['update_ts','update_user_id','mtf_icn','process_dt']].values.tolist()
                 postgres_query(database,schema,table,id = claim_id, action="update")
             
             elif key == "insert":

@@ -32,25 +32,21 @@ job.init(args['JOB_NAME'], args)
 def postgres_query(db,schema,table,**kwargs):    
     seq = kwargs.get("action")
     if seq == "read":
-        query = f"""(select c.internal_claim_num, c.xref_internal_claim_num, 
-            c.received_dt, c.src_claim_type_cd, null mra_error_code,
-            c.medicare_src_of_coverage, c.srvc_dt, c.rx_srvc_ref_num, 
-            null fill_num, '01' service_provider_id_qualifier, c.srvc_npi_num, 
-            null prescriber_id_qualifier,
-            c.prescriber_id, c.ndc_cd, c.quantity_dispensed, 
-            c.days_supply, c.indicator_340b_yn, c.orig_submitting_contract_num, c.mtf_curr_claim_stus_ref_cd,
-            b.wac_amt, b.mfp_amt, b.sdra_amt, a.pymt_pref,
-            null pre_mfp_refund_paid_product, null pre_mfp_refund_paid_amt, 
-            null pre_mfp_refund_paid_date, null pre_mfp_refund_paid_qty, 
-            null pre_mfp_refund_paid_method,
-            null mra_pm_switch, null mfp_refund_amt, null npi_mfp_refund, 
-            null qty_of_selected_drug, null amt_mfp_refund_by_mtfpm, 
-            null mfp_refund_adj, null mfp_refund_trans,
-            d.mfr_id, d.mfr_name,b.received_id
-            from claim.mtf_claim c join claim.mtf_claim_de_tpse a on a.received_dt = c.received_dt and a.received_id = c.received_id
-            join  claim.mtf_claim_pricing b on b.received_dt = c.received_dt and b.received_id = c.received_id
-            join  claim.mtf_claim_manufacturer d on d.received_dt = c.received_dt and d.received_id = c.received_id
-            where c.mtf_curr_claim_stus_ref_cd = 'MRN')
+        query = f"""(select c.internal_claim_num as "MTF_ICN", c.xref_internal_claim_num as "MTF_XREF_ICN", c.received_dt as "PROCESS_DT", 
+c.src_claim_type_cd as "SRC_CLAIM_TYPE_CODE", c.medicare_src_of_coverage as "MEDICARE_SRC_OF_COVERAGE", c.srvc_dt as "SRVC_DT", 
+c.rx_srvc_ref_num as "RX_SRVC_REF_NUM", coalesce(c.fill_num,'0') as "FILL_NUM", c.ncpdp_id as "NCPDP_ID", c.srvc_npi_num as "SRVC_PRVDR_ID", 
+c.prescriber_id as "PRESCRIBER_ID", c.ndc_cd as "NDC_CD", c.quantity_dispensed as "QUANTITY_DISPENSED", c.days_supply  as "DAYS_SUPPLY", 
+c.indicator_340b_yn as "340b_INDICATOR", c.orig_submitting_contract_num as "SUBMT_CONTRACT", b.wac_amt as "WAC", b.mfp_amt as "MFP",
+b.sdra_amt as "SDRA", a.pymt_pref as "SRVC_PRVDR_PYMT_PREF",
+null as "PREV_NDC_CD", null as "PREV_PYMT_AMT", null as "PREV_PYMT_DT", 
+null as PREV_PYMT_QUANTITY, null as "PREV_PYMT_MTHD_CD", null as "MRA_ERR_CD_1", null as "MRA_ERR_CD_2", null as "MRA_ERR_CD_3",
+null as "MRA_ERR_CD_4", null as "MRA_ERR_CD_5", null as "MRA_ERR_CD_6", null as "MRA_ERR_CD_7", null as "MRA_ERR_CD_8", null as "MRA_ERR_CD_9", 
+null as "MRA_ERR_CD_10", null as "MTF_PM_IND", null as "PYMT_MTHD_CD", null as "PYMT_QUANTITY", null as "PYMT_AMT", 
+null as "PYMT_ADJ_IND", null as "PYMT_TS", d.mfr_id as "MANUFACTURER_ID", d.mfr_name as "MANUFACTURER_NAME"
+from claim.mtf_claim c join claim.mtf_claim_de_tpse a on a.received_dt = c.received_dt and a.received_id = c.received_id
+     join  claim.mtf_claim_pricing b on b.received_dt = c.received_dt and b.received_id = c.received_id
+     join  claim.mtf_claim_manufacturer d on d.received_dt = c.received_dt and d.received_id = c.received_id
+where c.mtf_curr_claim_stus_ref_cd = 'MRN')
             """
         df = spark.read.format("jdbc") \
             .option("url", f"jdbc:postgresql://{host}:{5432}/{db}") \
@@ -151,8 +147,9 @@ schema_data =  [
     }}
     ]
 
-host = "database-1.ch8qiq2uct5o.us-east-1.rds.amazonaws.com"
-secret_name = "rds!db-dcb3ad0e-5246-450e-9f85-44450fccbddb"
+host = "dev-mtfdm-db-cluster.cluster-cjsa40wuo8ej.us-east-1.rds.amazonaws.com"
+secret_name = "dev/rds/postgres/app/mtfdm"
+mfr="mfr_"
 credentials = get_secret(secret_name)
 df_final = pd.DataFrame()
 stage_error = False
@@ -165,25 +162,25 @@ for entry in schema_data:
 
             if key == "read":
                 mfg_result = postgres_query(database,schema,table,action="read")
-                mfr_list = [row for row  in mfg_result.select("mfr_id", "mfr_name").distinct().collect()]
+                mfr_list = [row for row  in mfg_result.select("MANUFACTURER_ID", "MANUFACTURER_NAME").distinct().collect()]
 
                 if len(mfr_list) == 0:
                     print("No records found in the result")
                     stage_error = True
                 else:
                     for row in mfr_list:
-                        id_value = row["mfr_id"]
-                        mfg_name_value = row["mfr_name"]
-                        s3_folder_mfr = mfg_name_value.replace(" ","_").lower()
-                        df_filtered = mfg_result.filter((col("mfr_id") == id_value))
+                        id_value = row["MANUFACTURER_ID"]
+                        mfg_name_value = row["MANUFACTURER_NAME"]
+                        s3_folder_mfr = mfg_name_value.replace(" ","_").replace("-","_").lower()
+                        df_filtered = mfg_result.filter((col("MANUFACTURER_ID") == id_value))
                         ts = datetime.datetime.today().strftime("%m%d%Y.%H%S")
-                        file_path = f"{s3_folder_mfr}-{id_value}/mrn/outbound/{mfg_name_value}.{ts}.parquet"
+                        file_path = f"{mfr}{s3_folder_mfr}-{id_value}/mrn/outbound/{s3_folder_mfr}.{ts}.parquet"
                         df = df_filtered.toPandas()
-                        df = df.sort_values(by="srvc_npi_num")
-                        df.columns = df.columns.str.upper()
+                        df = df.sort_values(by="SRVC_PRVDR_ID")
+                        #df.columns = df.columns.str.upper()
                         
                         df.to_parquet(f"/tmp/{mfg_name_value}.{ts}.parquet")
-                        bucket_name = "rawtemp"
+                        bucket_name = "hhs-cms-mdrng-mtfdm-dev-mfr"
 
                         s3_client = boto3.client('s3')
                         s3_client.upload_file(f"/tmp/{mfg_name_value}.{ts}.parquet", bucket_name, file_path)

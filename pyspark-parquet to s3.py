@@ -6,7 +6,7 @@ from botocore.exceptions import NoCredentialsError
 import json
 from functools import reduce
 from awsglue.transforms import *
-# from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession
 from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
@@ -18,6 +18,16 @@ subprocess.call([sys.executable, "-m", "pip", "install", "--user", "psycopg2-bin
 import psycopg2
 import pandas as pd
 import numpy as np
+
+
+## @params: [JOB_NAME]
+args = getResolvedOptions(sys.argv, ['JOB_NAME'])
+
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args['JOB_NAME'], args)
 
 def postgres_query(db,schema,table,**kwargs):    
     seq = kwargs.get("action")
@@ -77,19 +87,24 @@ def postgres_query(db,schema,table,**kwargs):
         conn.close()
 
     elif seq == "insert":
+
         df = kwargs.get("dat")
         df = df[["received_dt", "received_id", "internal_claim_num"]]
         df["mtf_claim_stus_ref_cd"] = "RCD"
         df["insert_user_id"] = -1
-        df_selected = spark.createDataFrame(df)
-        df_selected.write.format("jdbc") \
-            .option("url", f"jdbc:postgresql://{host}:5432/{db}") \
-            .option("dbtable", df_selected) \
-            .option("user", credentials['username']) \
-            .option("password", credentials['password']) \
-            .option("driver", "org.postgresql.Driver") \
-            .mode("append") \
-            .save()
+
+        insert_query = f"""
+            INSERT INTO {schema}.{table} (received_dt, received_id, internal_claim_num, mtf_claim_stus_ref_cd, insert_user_id)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        conn = psycopg2.connect(
+            dbname=db, user=credentials['username'], password=credentials['password'], host=host, port="5432"
+        )
+        cursor = conn.cursor()
+        cursor.executemany(insert_query, df.values.tolist())
+        conn.commit()
+        cursor.close()
+        conn.close()
 
 
 def get_secret(secret_name):
@@ -139,61 +154,55 @@ schema_data =  [
 host = "database-1.ch8qiq2uct5o.us-east-1.rds.amazonaws.com"
 secret_name = "rds!db-dcb3ad0e-5246-450e-9f85-44450fccbddb"
 credentials = get_secret(secret_name)
-
-# database = schema_data["source_data"]["database"]
-# schema = schema_data["source_data"]["schema"]
-# table = schema_data["source_data"]["table_name"]
 df_final = pd.DataFrame()
+stage_error = False
 for entry in schema_data:
-    for key in entry.keys():        
-        database = entry[key]["database"]
-        schema = entry[key]["schema"]
-        table = entry[key]["table_name"]        
+    if stage_error == False:
+        for key in entry.keys():        
+            database = entry[key]["database"]
+            schema = entry[key]["schema"]
+            table = entry[key]["table_name"]        
 
-        if key == "read":
-            mfg_result = postgres_query(database,schema,table,action="read")
-            mfr_list = [row for row  in mfg_result.select("mfr_id", "mfr_name").distinct().collect()]
+            if key == "read":
+                mfg_result = postgres_query(database,schema,table,action="read")
+                mfr_list = [row for row  in mfg_result.select("mfr_id", "mfr_name").distinct().collect()]
 
-            if len(mfr_list) == 0:
-                print("No records found in the result")
-            else:
-                for row in mfr_list:
-                    id_value = row["mfr_id"]
-                    mfg_name_value = row["mfr_name"]
-                    s3_folder_mfr = mfg_name_value.replace(" ","_").lower()
-                    df_filtered = mfg_result.filter((col("mfr_id") == id_value))
-                    ts = datetime.datetime.today().strftime("%m%d%Y.%H%S")
-                    file_path = f"{s3_folder_mfr}-{id_value}/mrn/outbound/{mfg_name_value}.{ts}.parquet"
-                    np.bool = bool
-                    df = df_filtered.toPandas()
-                    df = df.sort_values(by="srvc_npi_num")
-                    df.columns = df.columns.str.upper()
-                    
-                    df.to_parquet(f"/tmp/{mfg_name_value}.{ts}.parquet")
-                    bucket_name = "rawtemp"
+                if len(mfr_list) == 0:
+                    print("No records found in the result")
+                    stage_error = True
+                else:
+                    for row in mfr_list:
+                        id_value = row["mfr_id"]
+                        mfg_name_value = row["mfr_name"]
+                        s3_folder_mfr = mfg_name_value.replace(" ","_").lower()
+                        df_filtered = mfg_result.filter((col("mfr_id") == id_value))
+                        ts = datetime.datetime.today().strftime("%m%d%Y.%H%S")
+                        file_path = f"{s3_folder_mfr}-{id_value}/mrn/outbound/{mfg_name_value}.{ts}.parquet"
+                        df = df_filtered.toPandas()
+                        df = df.sort_values(by="srvc_npi_num")
+                        df.columns = df.columns.str.upper()
+                        
+                        df.to_parquet(f"/tmp/{mfg_name_value}.{ts}.parquet")
+                        bucket_name = "rawtemp"
 
-                    s3_client = boto3.client('s3')
-                    s3_client.upload_file(f"/tmp/{mfg_name_value}.{ts}.parquet", bucket_name, file_path)
-                    df.columns = df.columns.str.lower()
-                    if df_final.empty:
-                        df_final = df
-                    else:
-                        df_final = pd.concat([df_final,df])
-        elif key == "update":
-        #Update source table as "RCD"
-            # df = spark.createDataFrame(df_final)
-            # df.withColumn("update_ts", lit(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]))
-            # df.withColumn("update_user_id", lit(-1))
-            # claim_id = {', '.join(f"'{val}'" for val in df_final['internal_claim_num'].tolist())}
-            df_final["update_ts"] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-            df_final["update_user_id"] = -1
-            df_final['received_dt']= df['received_dt'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
-            claim_id = df_final[['update_ts','update_user_id','internal_claim_num','received_dt']].values.tolist()
-            postgres_query(database,schema,table,id = claim_id, action="update")
-        
-        elif key == "insert":
-            # df = spark.createDataFrame(df_final)
-            # df.withColumn("update_ts", lit(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]))
-            # df.withColumn("update_user_id", lit(-1))
+                        s3_client = boto3.client('s3')
+                        s3_client.upload_file(f"/tmp/{mfg_name_value}.{ts}.parquet", bucket_name, file_path)
+                        df.columns = df.columns.str.lower()
+                        if df_final.empty:
+                            df_final = df
+                        else:
+                            df_final = pd.concat([df_final,df])
+            elif key == "update":
+                df_final["update_ts"] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                df_final["update_user_id"] = -1
+                df_final['received_dt']= df_final['received_dt'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
+                claim_id = df_final[['update_ts','update_user_id','internal_claim_num','received_dt']].values.tolist()
+                postgres_query(database,schema,table,id = claim_id, action="update")
+            
+            elif key == "insert":
+                postgres_query(database,schema,table,action="insert", dat=df_final)
+    else:
+        break
 
-            postgres_query(database,schema,table,data=df_final,action="insert", dat=df_final)
+
+job.commit()

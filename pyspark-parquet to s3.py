@@ -208,9 +208,10 @@ for entry in schema_data:
                         file_path = f"{mfr}{s3_folder_mfr}-{id_value}/mrn/outbound/{s3_folder_mfr}.{ts}.parquet"
                         df = df_filtered.toPandas()
                         df = df.sort_values(by="SRVC_PRVDR_ID")
-                        #df.columns = df.columns.str.upper()
-                        
-                        df.to_parquet(f"/tmp/{mfg_name_value}.{ts}.parquet")
+                        columns_to_remove = ["MANUFACTURER_ID","MANUFACTURER_NAME","RECEIVED_ID"]
+                        df_parquet = df.drop(columns=columns_to_remove)
+                        df_parquet.to_parquet(f"/tmp/{mfg_name_value}.{ts}.parquet")
+                        #df.to_parquet(f"/tmp/{mfg_name_value}.{ts}.parquet")
                         bucket_name = "hhs-cms-mdrng-mtfdm-dev-mfr"
 
                         s3_client = boto3.client('s3')

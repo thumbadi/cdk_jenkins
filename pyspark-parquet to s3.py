@@ -101,7 +101,21 @@ where c.mtf_curr_claim_stus_ref_cd = 'MRN')
         conn.commit()
         cursor.close()
         conn.close()
-
+        
+    elif seq == "meta":
+        df = kwargs.get("dat")
+        insert_query = f"""
+            INSERT INTO {schema}.{table} (job_run_id, claim_file_type_cd, claim_file_name, mfr_id, file_rec_cnt,claim_file_stus_cd,insert_user_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+        conn = psycopg2.connect(
+            dbname=db, user=credentials['username'], password=credentials['password'], host=host, port="5432"
+        )
+        cursor = conn.cursor()
+        cursor.executemany(insert_query, df.values.tolist())
+        conn.commit()
+        cursor.close()
+        conn.close()
 
 def get_secret(secret_name):
     """Fetch secret from AWS Secrets Manager."""
@@ -127,6 +141,16 @@ def get_secret(secret_name):
     except Exception as e:
         print(f"Error retrieving secret: {e}")
         raise e
+
+def get_GlueJob_id():
+    # Fetch latest running job
+    glue_client = boto3.client('glue')
+    response = glue_client.get_job_runs(JobName=args['JOB_NAME'])
+    latest_job_run_id = response['JobRuns'][0]['Id'] if response['JobRuns'] else 'UNKNOWN'
+
+    # print(f"Latest Glue {args['JOB_NAME']} and Job Run ID: {latest_job_run_id}")
+    # print("*****Test output")
+    return latest_job_run_id
     
 schema_data =  [
     {
@@ -144,6 +168,11 @@ schema_data =  [
         "table_name" : "mtf_claim_process_status",
         "schema" : "claim",
         "database" : "mtf"
+    }},
+    {"meta" : {
+        "table_name" : "claim_file_metadata",
+        "schema" : "claim",
+        "database" : "mtf"
     }}
     ]
 
@@ -153,6 +182,8 @@ mfr="mfr_"
 credentials = get_secret(secret_name)
 df_final = pd.DataFrame()
 stage_error = False
+job_id = None
+meta_info = []
 for entry in schema_data:
     if stage_error == False:
         for key in entry.keys():        
@@ -184,8 +215,8 @@ for entry in schema_data:
 
                         s3_client = boto3.client('s3')
                         s3_client.upload_file(f"/tmp/{mfg_name_value}.{ts}.parquet", bucket_name, file_path)
-                     #   org_columns = ["internal_claim_num","xref_internal_claim_num","received_dt","src_claim_type_cd","medicare_src_of_coverage","srvc_dt","rx_srvc_ref_num",
-                      #                "fill_num","ncpdp_id","srvc_npi_num","prescriber_id","ndc_cd","quantity_dispensed",]
+                        job_id = get_GlueJob_id()
+                        meta_info.append([job_id,"MRN",f"{mfg_name_value}.{ts}.parquet",id_value,df.shape[0],"COMPLETED",-1])
                         df.columns = df.columns.str.lower()
                         if df_final.empty:
                             df_final = df
@@ -198,9 +229,12 @@ for entry in schema_data:
                 df_final['process_dt']= df_final['process_dt'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
                 claim_id = df_final[['update_ts','update_user_id','mtf_icn','process_dt']].values.tolist()
                 postgres_query(database,schema,table,id = claim_id, action="update")
-            
             elif key == "insert":
                 postgres_query(database,schema,table,action="insert", dat=df_final)
+            elif key == "meta":
+                meta_cols = ["job_run_id","claim_file_type_cd","claim_file_name","mfr_id","file_rec_cnt","claim_file_stus_cd","insert_user_id"]
+                meta_df = pd.DataFrame(meta_info, columns=meta_cols)
+                postgres_query(database,schema,table,action="meta", dat=meta_df)
     else:
         break
 

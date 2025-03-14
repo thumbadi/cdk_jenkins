@@ -30,5 +30,5 @@ CREATE TABLE claim.claim_file_metadata (
 	insert_user_id int8 NOT NULL,
 	insert_ts timestamp(6) DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	update_user_id int8 NULL,
-	update_ts timestamp(6) NULL,
+	update_ts timestamp(6) NULL
 );

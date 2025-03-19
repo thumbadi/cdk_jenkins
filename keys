@@ -32,3 +32,16 @@ CREATE TABLE claim.claim_file_metadata (
 	update_user_id int8 NULL,
 	update_ts timestamp(6) NULL
 );
+
+provider "aws" {
+  region = "us-east-1"  # Replace with your desired AWS region
+}
+
+resource "aws_s3_bucket" "example_bucket" {
+  bucket = "example-bucket-name"  # Replace with your desired bucket name
+}
+
+resource "aws_s3_object" "example_folder" {
+  bucket = aws_s3_bucket.example_bucket.bucket
+  key    = "example-folder/"  # The trailing slash indicates this is a folder
+}

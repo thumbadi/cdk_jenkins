@@ -18,6 +18,7 @@ subprocess.call([sys.executable, "-m", "pip", "install", "--user", "psycopg2-bin
 import psycopg2
 import pandas as pd
 import numpy as np
+import os
 
 
 ## @params: [JOB_NAME]
@@ -105,8 +106,8 @@ where c.mtf_curr_claim_stus_ref_cd = 'MRN')
     elif seq == "meta":
         df = kwargs.get("dat")
         insert_query = f"""
-            INSERT INTO {schema}.{table} (job_run_id, claim_file_type_cd, claim_file_name, mfr_id, file_rec_cnt,claim_file_stus_cd,insert_user_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO {schema}.{table} (job_run_id, claim_file_type_cd, claim_file_name, claim_file_size, mfr_id, file_rec_cnt,claim_file_stus_cd,insert_user_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         conn = psycopg2.connect(
             dbname=db, user=credentials['username'], password=credentials['password'], host=host, port="5432"
@@ -193,31 +194,33 @@ for entry in schema_data:
 
             if key == "read":
                 mfg_result = postgres_query(database,schema,table,action="read")
-                mfr_list = [row for row  in mfg_result.select("MANUFACTURER_ID", "MANUFACTURER_NAME").distinct().collect()]
+                mfr_list = [row for row  in mfg_result.select("MANUFACTURER_ID", "MANUFACTURER_NAME", "DRUG_ID").distinct().collect()]
 
                 if len(mfr_list) == 0:
                     print("No records found in the result")
                     stage_error = True
                 else:
                     for row in mfr_list:
+                        drug_value = row["DRUG_ID"]
                         id_value = row["MANUFACTURER_ID"]
                         mfg_name_value = row["MANUFACTURER_NAME"]
                         s3_folder_mfr = mfg_name_value.replace(" ","_").replace("-","_").lower()
-                        df_filtered = mfg_result.filter((col("MANUFACTURER_ID") == id_value))
+                        df_filtered = mfg_result.filter((col("MANUFACTURER_ID") == id_value) & (col("DRUG_ID") == drug_value))
                         ts = datetime.datetime.today().strftime("%m%d%Y.%H%S")
-                        file_path = f"{mfr}{s3_folder_mfr}-{id_value}/mrn/outbound/{s3_folder_mfr}.{ts}.parquet"
+                        file_path = f"{s3_folder_mfr}-{id_value}/mrn/outbound/{id_value}{drug_value}_MRN_TEST_{ts}.parquet"
+                        #file_path = f"{mfr}{s3_folder_mfr}-{id_value}/mrn/outbound/{s3_folder_mfr}.{ts}.parquet"
                         df = df_filtered.toPandas()
                         df = df.sort_values(by="SRVC_PRVDR_ID")
-                        columns_to_remove = ["MANUFACTURER_ID","MANUFACTURER_NAME","RECEIVED_ID"]
+                        columns_to_remove = ["MANUFACTURER_ID","MANUFACTURER_NAME","RECEIVED_ID","DRUG_ID"]
                         df_parquet = df.drop(columns=columns_to_remove)
                         df_parquet.to_parquet(f"/tmp/{mfg_name_value}.{ts}.parquet")
                         #df.to_parquet(f"/tmp/{mfg_name_value}.{ts}.parquet")
                         bucket_name = "hhs-cms-mdrng-mtfdm-dev-mfr"
-
+                        meta_file_size = os.path.getsize(f"/tmp/{mfg_name_value}.{ts}.parquet")
                         s3_client = boto3.client('s3')
                         s3_client.upload_file(f"/tmp/{mfg_name_value}.{ts}.parquet", bucket_name, file_path)
                         job_id = get_GlueJob_id()
-                        meta_info.append([job_id,"MRN",f"{mfg_name_value}.{ts}.parquet",id_value,df.shape[0],"COMPLETED",-1])
+                        meta_info.append([job_id,"MRN",f"{mfg_name_value}.{ts}.parquet",id_value,meta_file_size,df.shape[0],"COMPLETED",-1])
                         df.columns = df.columns.str.lower()
                         if df_final.empty:
                             df_final = df
@@ -233,7 +236,7 @@ for entry in schema_data:
             elif key == "insert":
                 postgres_query(database,schema,table,action="insert", dat=df_final)
             elif key == "meta":
-                meta_cols = ["job_run_id","claim_file_type_cd","claim_file_name","mfr_id","file_rec_cnt","claim_file_stus_cd","insert_user_id"]
+                meta_cols = ["job_run_id","claim_file_type_cd","claim_file_name","claim_file_size","mfr_id","file_rec_cnt","claim_file_stus_cd","insert_user_id"]
                 meta_df = pd.DataFrame(meta_info, columns=meta_cols)
                 postgres_query(database,schema,table,action="meta", dat=meta_df)
     else:

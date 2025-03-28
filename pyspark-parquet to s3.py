@@ -33,7 +33,7 @@ job.init(args['JOB_NAME'], args)
 def postgres_query(db,schema,table,**kwargs):    
     seq = kwargs.get("action")
     if seq == "read":
-        query = f"""(select c.internal_claim_num as "MTF_ICN", c.xref_internal_claim_num as "MTF_XREF_ICN", c.received_dt as "PROCESS_DT", 
+        query = f"""(select c.internal_claim_num as "MTF_ICN", c.xref_internal_claim_num as "MTF_XREF_ICN", coalesce(c.mrn_process_dt, CURRENT_DATE) as "PROCESS_DT",
 c.src_claim_type_cd as "SRC_CLAIM_TYPE_CODE", c.medicare_src_of_coverage as "MEDICARE_SRC_OF_COVERAGE", c.srvc_dt as "SRVC_DT", 
 c.rx_srvc_ref_num as "RX_SRVC_REF_NUM", coalesce(c.fill_num,'0') as "FILL_NUM", c.ncpdp_id as "NCPDP_ID", c.srvc_npi_num as "SRVC_PRVDR_ID", 
 c.prescriber_id as "PRESCRIBER_ID", c.ndc_cd as "NDC_CD", c.quantity_dispensed as "QUANTITY_DISPENSED", c.days_supply  as "DAYS_SUPPLY", 

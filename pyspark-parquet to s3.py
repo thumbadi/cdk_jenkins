@@ -231,7 +231,7 @@ for entry in schema_data:
                 df_final["update_user_id"] = -1
                 df_final['received_dt']= df_final['received_dt'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
                 df_final['process_dt']= df_final['process_dt'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
-                claim_id = df_final[['update_ts','update_user_id','mrn_process_dt','mtf_icn','received_dt']].values.tolist()
+                claim_id = df_final[['update_ts','update_user_id','process_dt','mtf_icn','received_dt']].values.tolist()
                 postgres_query(database,schema,table,id = claim_id, action="update")
             elif key == "insert":
                 postgres_query(database,schema,table,action="insert", dat=df_final)

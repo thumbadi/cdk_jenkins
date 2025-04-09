@@ -2,6 +2,7 @@ import sys
 import subprocess
 import boto3
 import datetime
+import logging
 from botocore.exceptions import NoCredentialsError
 import json
 from functools import reduce
@@ -19,10 +20,15 @@ import psycopg2
 import pandas as pd
 import numpy as np
 import os
+from urllib.parse import urlparse
+import re
 
-
-## @params: [JOB_NAME]
-args = getResolvedOptions(sys.argv, ['JOB_NAME'])
+# Create a Glue client
+logger = logging.getLogger()
+logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+logger.setLevel(logging.DEBUG)
+glue_client = boto3.client('glue')
+args = getResolvedOptions(sys.argv, ['JOB_NAME', 'MTF_DBNAME', 'S3_BUCKET', 'ENV'])
 
 sc = SparkContext()
 glueContext = GlueContext(sc)
@@ -30,30 +36,30 @@ spark = glueContext.spark_session
 job = Job(glueContext)
 job.init(args['JOB_NAME'], args)
 
-def postgres_query(db,schema,table,**kwargs):    
+def postgres_query(jdbc_url,mtf_db,schema,table,**kwargs):
     seq = kwargs.get("action")
     if seq == "read":
-        query = f"""(select c.internal_claim_num as "MTF_ICN", c.xref_internal_claim_num as "MTF_XREF_ICN", c.received_dt as "RECEIVED_DT", coalesce(c.mrn_process_dt, CURRENT_DATE) as "PROCESS_DT",
-c.src_claim_type_cd as "SRC_CLAIM_TYPE_CODE", c.medicare_src_of_coverage as "MEDICARE_SRC_OF_COVERAGE", c.srvc_dt as "SRVC_DT", 
+        query = f"""(select c.internal_claim_num as "MTF_ICN", c.xref_internal_claim_num as "MTF_XREF_ICN", c.received_dt as "RECEIVED_DT", coalesce(c.mrn_process_dt, CURRENT_DATE) as "PROCESS_DT", 
+case when c.src_claim_type_cd = 'O' then '01' else null end as "TRANSACTION_CD", c.medicare_src_of_coverage as "MEDICARE_SRC_OF_COVERAGE", c.srvc_dt as "SRVC_DT", 
 c.rx_srvc_ref_num as "RX_SRVC_REF_NUM", coalesce(c.fill_num,'0') as "FILL_NUM", c.ncpdp_id as "NCPDP_ID", c.srvc_npi_num as "SRVC_PRVDR_ID", 
-c.prescriber_id as "PRESCRIBER_ID", c.ndc_cd as "NDC_CD", c.quantity_dispensed as "QUANTITY_DISPENSED", c.days_supply  as "DAYS_SUPPLY", 
+c.prescriber_id as "PRESCRIBER_ID", c.ndc_cd as "NDC_CD", (select drug_id from shared.ndc ndc where ndc.ndc_cd = c.ndc_cd) as "DRUG_ID", c.quantity_dispensed as "QUANTITY_DISPENSED", c.days_supply  as "DAYS_SUPPLY", 
 c.indicator_340b_yn as "340b_INDICATOR", c.orig_submitting_contract_num as "SUBMT_CONTRACT", b.wac_amt as "WAC", b.mfp_amt as "MFP",
 b.sdra_amt as "SDRA", a.pymt_pref as "SRVC_PRVDR_PYMT_PREF",
 null as "PREV_NDC_CD", null as "PREV_PYMT_AMT", null as "PREV_PYMT_DT", 
-null as PREV_PYMT_QUANTITY, null as "PREV_PYMT_MTHD_CD", null as "MRA_ERR_CD_1", null as "MRA_ERR_CD_2", null as "MRA_ERR_CD_3",
+null as "PREV_PYMT_QUANTITY", null as "PREV_PYMT_MTHD_CD", null as "MRA_ERR_CD_1", null as "MRA_ERR_CD_2", null as "MRA_ERR_CD_3",
 null as "MRA_ERR_CD_4", null as "MRA_ERR_CD_5", null as "MRA_ERR_CD_6", null as "MRA_ERR_CD_7", null as "MRA_ERR_CD_8", null as "MRA_ERR_CD_9", 
-null as "MRA_ERR_CD_10", null as "MTF_PM_IND", null as "PYMT_MTHD_CD", null as "PYMT_QUANTITY", null as "PYMT_AMT", 
-null as "PYMT_ADJ_IND", null as "PYMT_TS", d.mfr_id as "MANUFACTURER_ID", d.mfr_name as "MANUFACTURER_NAME", b.received_id as "RECEIVED_ID"
+null as "MRA_ERR_CD_10", null as "MTF_PM_IND", null as "PYMT_MTHD_CD", null as "PYMT_AMT", 
+null as "PYMT_TS", d.mfr_id as "MANUFACTURER_ID", d.mfr_name as "MANUFACTURER_NAME", b.received_id as "RECEIVED_ID"
 from claim.mtf_claim c join claim.mtf_claim_de_tpse a on a.received_dt = c.received_dt and a.received_id = c.received_id
      join  claim.mtf_claim_pricing b on b.received_dt = c.received_dt and b.received_id = c.received_id
      join  claim.mtf_claim_manufacturer d on d.received_dt = c.received_dt and d.received_id = c.received_id
-where c.mtf_curr_claim_stus_ref_cd = 'MRN')
+where c.mtf_curr_claim_stus_ref_cd = 'MRN' OR c.mtf_curr_claim_stus_ref_cd = 'RAF')
             """
         df = spark.read.format("jdbc") \
-            .option("url", f"jdbc:postgresql://{host}:{5432}/{db}") \
+            .option("url", f"{jdbc_url}") \
             .option("dbtable", query) \
-            .option("user", credentials['username']) \
-            .option("password", credentials['password']) \
+            .option("user", mtf_secret['username']) \
+            .option("password", mtf_secret['password']) \
             .option("driver", "org.postgresql.Driver") \
             .load()
         return df
@@ -61,17 +67,17 @@ where c.mtf_curr_claim_stus_ref_cd = 'MRN')
         id_list = kwargs.get("id")
 
         conn = psycopg2.connect(
-        dbname=db,
-        user=credentials['username'],
-        password=credentials['password'],
+        dbname=mtf_db,
+        user=mtf_secret['username'],
+        password=mtf_secret['password'],
         host=host,
-        port=5432
+        port=port
         )
         cursor = conn.cursor()
         
         query = """
             UPDATE claim.mtf_claim \
-            SET mtf_curr_claim_stus_ref_cd = 'RCD', update_ts = %s, update_user_id = %s, mrn_process_dt = %s\
+            SET mtf_curr_claim_stus_ref_cd = 'SNT', update_ts = %s, update_user_id = %s, mrn_process_dt = %s\
             WHERE internal_claim_num = (%s) AND received_dt = %s
         """       
              
@@ -86,16 +92,15 @@ where c.mtf_curr_claim_stus_ref_cd = 'MRN')
     elif seq == "insert":
 
         df = kwargs.get("dat")
-        df = df[["process_dt", "received_id", "mtf_icn"]]
-        df["mtf_claim_stus_ref_cd"] = "RCD"
+        df = df[["received_dt", "received_id", "mtf_icn"]]
+        df["mtf_claim_stus_ref_cd"] = "SNT"
         df["insert_user_id"] = -1
-        #df = df.rename(columns={"internal_claim_num": "mtf_icn", "received_dt": "process_dt"})
         insert_query = f"""
             INSERT INTO {schema}.{table} (received_dt, received_id, internal_claim_num, mtf_claim_stus_ref_cd, insert_user_id)
             VALUES (%s, %s, %s, %s, %s)
         """
         conn = psycopg2.connect(
-            dbname=db, user=credentials['username'], password=credentials['password'], host=host, port="5432"
+            dbname=mtf_db, user=mtf_secret['username'], password=mtf_secret['password'], host=host, port=port
         )
         cursor = conn.cursor()
         cursor.executemany(insert_query, df.values.tolist())
@@ -106,11 +111,11 @@ where c.mtf_curr_claim_stus_ref_cd = 'MRN')
     elif seq == "meta":
         df = kwargs.get("dat")
         insert_query = f"""
-            INSERT INTO {schema}.{table} (job_run_id, claim_file_type_cd, claim_file_name, claim_file_size, mfr_id, file_rec_cnt,claim_file_stus_cd,insert_user_id)
+            INSERT INTO {schema}.{table} (job_run_id, claim_file_type_cd, claim_file_name, claim_file_size, mfr_id, file_rec_cnt, claim_file_stus_cd, insert_user_id)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         conn = psycopg2.connect(
-            dbname=db, user=credentials['username'], password=credentials['password'], host=host, port="5432"
+            dbname=mtf_db, user=mtf_secret['username'], password=mtf_secret['password'], host=host, port=port
         )
         cursor = conn.cursor()
         cursor.executemany(insert_query, df.values.tolist())
@@ -145,42 +150,48 @@ def get_secret(secret_name):
 
 def get_GlueJob_id():
     # Fetch latest running job
-    glue_client = boto3.client('glue')
+    #glue_client = boto3.client('glue')
     response = glue_client.get_job_runs(JobName=args['JOB_NAME'])
     latest_job_run_id = response['JobRuns'][0]['Id'] if response['JobRuns'] else 'UNKNOWN'
-
-    # print(f"Latest Glue {args['JOB_NAME']} and Job Run ID: {latest_job_run_id}")
-    # print("*****Test output")
     return latest_job_run_id
     
 schema_data =  [
     {
     "read" : {
             "table_name" : "mtf_claim",
-            "schema" : "claim",
-            "database" : "mtf"
+            "schema" : "claim"
     }},
     {"update" : {
             "table_name" : "mtf_claim",
-            "schema" : "claim",
-            "database" : "mtf"
+            "schema" : "claim"
     }},
     {"insert" : {
         "table_name" : "mtf_claim_process_status",
-        "schema" : "claim",
-        "database" : "mtf"
+        "schema" : "claim"
     }},
     {"meta" : {
         "table_name" : "claim_file_metadata",
-        "schema" : "claim",
-        "database" : "mtf"
+        "schema" : "claim"
     }}
     ]
 
-host = "dev-mtfdm-db-cluster.cluster-cjsa40wuo8ej.us-east-1.rds.amazonaws.com"
-secret_name = "dev/rds/postgres/app/mtfdm"
-mfr="mfr_"
-credentials = get_secret(secret_name)
+mtf_connection = glue_client.get_connection(Name='MTFDMDataConnector')
+mtf_connection_options = mtf_connection['Connection']['ConnectionProperties']
+jdbc_url = mtf_connection['Connection']['ConnectionProperties']['JDBC_CONNECTION_URL']
+mtf_secret=get_secret(mtf_connection_options['SECRET_ID'])
+mtf_db=args['MTF_DBNAME']
+s3_bucket=args['S3_BUCKET']
+env=args['ENV']
+parsed=urlparse(jdbc_url.replace("jdbc:", ""))
+port=parsed.port
+host=None
+pattern = r"([\w.-]+\.rds\.amazonaws\.com)"
+match = re.search(pattern, jdbc_url)
+if match:
+    host= match.group(1)
+
+mrn="MRN_"
+mfr="mfr"
 df_final = pd.DataFrame()
 stage_error = False
 job_id = None
@@ -188,12 +199,11 @@ meta_info = []
 for entry in schema_data:
     if stage_error == False:
         for key in entry.keys():        
-            database = entry[key]["database"]
             schema = entry[key]["schema"]
             table = entry[key]["table_name"]        
 
             if key == "read":
-                mfg_result = postgres_query(database,schema,table,action="read")
+                mfg_result = postgres_query(jdbc_url,mtf_db,schema,table,action="read")
                 mfr_list = [row for row  in mfg_result.select("MANUFACTURER_ID", "MANUFACTURER_NAME", "DRUG_ID").distinct().collect()]
 
                 if len(mfr_list) == 0:
@@ -205,22 +215,22 @@ for entry in schema_data:
                         id_value = row["MANUFACTURER_ID"]
                         mfg_name_value = row["MANUFACTURER_NAME"]
                         s3_folder_mfr = mfg_name_value.replace(" ","_").replace("-","_").lower()
+                        s3_folder_mfr_upper = s3_folder_mfr.upper()
                         df_filtered = mfg_result.filter((col("MANUFACTURER_ID") == id_value) & (col("DRUG_ID") == drug_value))
-                        ts = datetime.datetime.today().strftime("%m%d%Y.%H%S")
-                        file_path = f"{s3_folder_mfr}-{id_value}/mrn/outbound/{id_value}{drug_value}_MRN_TEST_{ts}.parquet"
-                        #file_path = f"{mfr}{s3_folder_mfr}-{id_value}/mrn/outbound/{s3_folder_mfr}.{ts}.parquet"
+                        ts = datetime.datetime.today().strftime("%Y%m%d.%H%M%S")
+                        file_name=f"{id_value}_{drug_value}_MRN_{env}_{ts}.parquet"
+                        file_path = f"{mfr}-{id_value}/mrn/outbound/{id_value}_{drug_value}_MRN_{env}_{ts}.parquet"
                         df = df_filtered.toPandas()
                         df = df.sort_values(by="SRVC_PRVDR_ID")
-                        columns_to_remove = ["MANUFACTURER_ID","MANUFACTURER_NAME","RECEIVED_ID","DRUG_ID"]
+                        columns_to_remove = ["MANUFACTURER_ID","MANUFACTURER_NAME","RECEIVED_ID","DRUG_ID","RECEIVED_DT"]
                         df_parquet = df.drop(columns=columns_to_remove)
-                        df_parquet.to_parquet(f"/tmp/{mfg_name_value}.{ts}.parquet")
-                        #df.to_parquet(f"/tmp/{mfg_name_value}.{ts}.parquet")
-                        bucket_name = "hhs-cms-mdrng-mtfdm-dev-mfr"
-                        meta_file_size = os.path.getsize(f"/tmp/{mfg_name_value}.{ts}.parquet")
+                        df_parquet.to_parquet(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet")
+                        bucket_name = s3_bucket
+                        meta_file_size = os.path.getsize(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet")
                         s3_client = boto3.client('s3')
-                        s3_client.upload_file(f"/tmp/{mfg_name_value}.{ts}.parquet", bucket_name, file_path)
+                        s3_client.upload_file(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet", bucket_name, file_path)
                         job_id = get_GlueJob_id()
-                        meta_info.append([job_id,"MRN",f"{mfg_name_value}.{ts}.parquet",id_value,meta_file_size,df.shape[0],"COMPLETED",-1])
+                        meta_info.append([job_id,"004",file_name,meta_file_size,id_value,df.shape[0],"COMPLETED",-1])
                         df.columns = df.columns.str.lower()
                         if df_final.empty:
                             df_final = df
@@ -232,15 +242,14 @@ for entry in schema_data:
                 df_final['received_dt']= df_final['received_dt'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
                 df_final['process_dt']= df_final['process_dt'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
                 claim_id = df_final[['update_ts','update_user_id','process_dt','mtf_icn','received_dt']].values.tolist()
-                postgres_query(database,schema,table,id = claim_id, action="update")
+                postgres_query(jdbc_url,mtf_db,schema,table,id = claim_id, action="update")
             elif key == "insert":
-                postgres_query(database,schema,table,action="insert", dat=df_final)
+                postgres_query(jdbc_url,mtf_db,schema,table,action="insert", dat=df_final)
             elif key == "meta":
                 meta_cols = ["job_run_id","claim_file_type_cd","claim_file_name","claim_file_size","mfr_id","file_rec_cnt","claim_file_stus_cd","insert_user_id"]
                 meta_df = pd.DataFrame(meta_info, columns=meta_cols)
-                postgres_query(database,schema,table,action="meta", dat=meta_df)
+                postgres_query(jdbc_url,mtf_db,schema,table,action="meta",dat=meta_df)
     else:
         break
-
 
 job.commit()

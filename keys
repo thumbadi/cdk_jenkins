@@ -13,3 +13,6 @@ from claim.mtf_claim c join claim.mtf_claim_de_tpse a on a.received_dt = c.recei
      join  claim.mtf_claim_mra e on e.claim_received_dt = c.received_dt and e.claim_received_id = c.received_id
                and (e.mra_received_dt, e.mra_received_id) in (select max(mra_received_dt), max(mra_received_id) from claim.mtf_claim_mra f where e.claim_received_dt = f.claim_received_dt and e.claim_received_id = f.claim_received_id)
 where c.mtf_curr_claim_stus_ref_cd = 'RAF';
+
+
+Error Category: UNCLASSIFIED_ERROR; Failed Line Number: 234; TypeError: cannot concatenate object of type '<class 'pyspark.sql.dataframe.DataFrame'>'; only Series and DataFrame objs are valid

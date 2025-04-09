@@ -53,7 +53,7 @@ null as "PYMT_TS", d.mfr_id as "MANUFACTURER_ID", d.mfr_name as "MANUFACTURER_NA
 from claim.mtf_claim c join claim.mtf_claim_de_tpse a on a.received_dt = c.received_dt and a.received_id = c.received_id
      join  claim.mtf_claim_pricing b on b.received_dt = c.received_dt and b.received_id = c.received_id
      join  claim.mtf_claim_manufacturer d on d.received_dt = c.received_dt and d.received_id = c.received_id
-where c.mtf_curr_claim_stus_ref_cd = 'MRN' OR c.mtf_curr_claim_stus_ref_cd = 'RAF')
+where c.mtf_curr_claim_stus_ref_cd = 'MRN')
             """
         df = spark.read.format("jdbc") \
             .option("url", f"{jdbc_url}") \

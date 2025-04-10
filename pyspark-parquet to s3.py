@@ -220,18 +220,17 @@ for entry in schema_data:
     if stage_error == False:
         for key in entry.keys():        
             schema = entry[key]["schema"]
-            table = entry[key]["table_name"]        
+            table = entry[key]["table_name"]
+            start = False
 
             if key == "read":
-                #mfg_result = postgres_query(jdbc_url,mtf_db,schema,table,action="read",code = cde)
                 seq = ["MRN","RAF"]
-                mfg_result = pd.DataFrame()
                 for cde in seq:
                     tmp_mfg_result = postgres_query(jdbc_url,mtf_db,schema,table,action="read",code = cde)
-                    if mfg_result.shape == 0:
-                        mfg_result = tmp_mfg_result
-                    else:
-                        mfg_result = pd.concat(mfg_result,tmp_mfg_result)
+                    if tmp_mfg_result.count() != 0:
+                        mfg_result = tmp_mfg_result if start == False else mfg_result.union(tmp_mfg_result)
+                        start = True
+                    
                 mfr_list = [row for row  in mfg_result.select("MANUFACTURER_ID", "MANUFACTURER_NAME", "DRUG_ID").distinct().collect()]
 
                 if len(mfr_list) == 0:

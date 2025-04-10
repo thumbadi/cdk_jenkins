@@ -12,7 +12,6 @@ from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from pyspark.sql.functions import col,lit
-from awsglue.utils import getResolvedOptions
 from awsglue.dynamicframe import DynamicFrame
 from awsglue.job import Job
 subprocess.call([sys.executable, "-m", "pip", "install", "--user", "psycopg2-binary"])
@@ -73,7 +72,7 @@ from claim.mtf_claim c join claim.mtf_claim_de_tpse a on a.received_dt = c.recei
      join  claim.mtf_claim_manufacturer d on d.received_dt = c.received_dt and d.received_id = c.received_id
      join  claim.mtf_claim_mra e on e.claim_received_dt = c.received_dt and e.claim_received_id = c.received_id
                and (e.mra_received_dt, e.mra_received_id) in (select max(mra_received_dt), max(mra_received_id) from claim.mtf_claim_mra f where e.claim_received_dt = f.claim_received_dt and e.claim_received_id = f.claim_received_id)
-where c.mtf_curr_claim_stus_ref_cd = 'RAF');
+where c.mtf_curr_claim_stus_ref_cd = 'RAF')
                                 """
         df = spark.read.format("jdbc") \
             .option("url", f"{jdbc_url}") \
@@ -227,42 +226,42 @@ for entry in schema_data:
                 seq = ["MRN","RAF"]
                 for cde in seq:
                     tmp_mfg_result = postgres_query(jdbc_url,mtf_db,schema,table,action="read",code = cde)
+                    
                     if tmp_mfg_result.count() != 0:
                         mfg_result = tmp_mfg_result if start == False else mfg_result.union(tmp_mfg_result)
                         start = True
-                    
-                        mfr_list = [row for row  in mfg_result.select("MANUFACTURER_ID", "MANUFACTURER_NAME", "DRUG_ID").distinct().collect()]
-
-                        if len(mfr_list) == 0:
-                            print("No records found in the result")
-                            stage_error = True
-                        else:
-                            for row in mfr_list:
-                                drug_value = row["DRUG_ID"]
-                                id_value = row["MANUFACTURER_ID"]
-                                mfg_name_value = row["MANUFACTURER_NAME"]
-                                s3_folder_mfr = mfg_name_value.replace(" ","_").replace("-","_").lower()
-                                s3_folder_mfr_upper = s3_folder_mfr.upper()
-                                df_filtered = mfg_result.filter((col("MANUFACTURER_ID") == id_value) & (col("DRUG_ID") == drug_value))
-                                ts = datetime.datetime.today().strftime("%Y%m%d.%H%M%S")
-                                file_name=f"{id_value}_{drug_value}_MRN_{env}_{ts}.parquet"
-                                file_path = f"{mfr}-{id_value}/mrn/outbound/{id_value}_{drug_value}_MRN_{env}_{ts}.parquet"
-                                df = df_filtered.toPandas()
-                                df = df.sort_values(by="SRVC_PRVDR_ID")
-                                columns_to_remove = ["MANUFACTURER_ID","MANUFACTURER_NAME","RECEIVED_ID","DRUG_ID","RECEIVED_DT"]
-                                df_parquet = df.drop(columns=columns_to_remove)
-                                df_parquet.to_parquet(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet")
-                                bucket_name = s3_bucket
-                                meta_file_size = os.path.getsize(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet")
-                                s3_client = boto3.client('s3')
-                                s3_client.upload_file(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet", bucket_name, file_path)
-                                job_id = get_GlueJob_id()
-                                meta_info.append([job_id,"004",file_name,meta_file_size,id_value,df.shape[0],"COMPLETED",-1])
-                                df.columns = df.columns.str.lower()
-                                if df_final.empty:
-                                    df_final = df
-                                else:
-                                    df_final = pd.concat([df_final,df])
+                if mfg_result.count() != 0:
+                    mfr_list = [row for row  in mfg_result.select("MANUFACTURER_ID", "MANUFACTURER_NAME", "DRUG_ID").distinct().collect()]
+                    if len(mfr_list) == 0:
+                        print("No records found in the result")
+                        stage_error = True
+                    else:
+                        for row in mfr_list:
+                            drug_value = row["DRUG_ID"]
+                            id_value = row["MANUFACTURER_ID"]
+                            mfg_name_value = row["MANUFACTURER_NAME"]
+                            s3_folder_mfr = mfg_name_value.replace(" ","_").replace("-","_").lower()
+                            s3_folder_mfr_upper = s3_folder_mfr.upper()
+                            df_filtered = mfg_result.filter((col("MANUFACTURER_ID") == id_value) & (col("DRUG_ID") == drug_value))
+                            ts = datetime.datetime.today().strftime("%Y%m%d.%H%M%S")
+                            file_name=f"{id_value}_{drug_value}_MRN_{env}_{ts}.parquet"
+                            file_path = f"{mfr}-{id_value}/mrn/outbound/{id_value}_{drug_value}_MRN_{env}_{ts}.parquet"
+                            df = df_filtered.toPandas()
+                            df = df.sort_values(by="SRVC_PRVDR_ID")
+                            columns_to_remove = ["MANUFACTURER_ID","MANUFACTURER_NAME","RECEIVED_ID","DRUG_ID","RECEIVED_DT"]
+                            df_parquet = df.drop(columns=columns_to_remove)
+                            df_parquet.to_parquet(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet")
+                            bucket_name = s3_bucket
+                            meta_file_size = os.path.getsize(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet")
+                            s3_client = boto3.client('s3')
+                            s3_client.upload_file(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet", bucket_name, file_path)
+                            job_id = get_GlueJob_id()
+                            meta_info.append([job_id,"004",file_name,meta_file_size,id_value,df.shape[0],"COMPLETED",-1])
+                            df.columns = df.columns.str.lower()
+                            if df_final.empty:
+                                df_final = df
+                            else:
+                                df_final = pd.concat([df_final,df])
             elif key == "update":
                 df_final["update_ts"] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
                 df_final["update_user_id"] = -1

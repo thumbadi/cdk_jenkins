@@ -193,6 +193,21 @@ schema_data =  [
         "schema" : "claim"
     }}
     ]
+mfr_items = ["Bristol Myers Squibb","Immunex Corporation","Novartis Pharms Corp","AstraZeneca AB"
+             "Merck Sharp Dohme","Janssen Biotech, Inc.","Boehringer Ingelheim","Novo Nordisk Inc",
+             "Janssen Pharms","Pharmacyclics LLC","Janssen Pharms"]    
+mfr_codes = {
+    "Bristol Myers Squibb" : 10,
+    "Immunex Corporation" : 11,
+    "Novartis Pharms Corp" : 12,
+    "AstraZeneca AB" : 13,
+    "Merck Sharp Dohme" : 15,
+    "Janssen Biotech, Inc." : 14,
+    "Boehringer Ingelheim" : 16,
+    "Novo Nordisk Inc" : 17,
+    "Janssen Pharms" : 18,
+    "Pharmacyclics LLC" : 19
+} 
 
 mtf_connection = glue_client.get_connection(Name='MTFDMDataConnector')
 mtf_connection_options = mtf_connection['Connection']['ConnectionProperties']
@@ -213,6 +228,8 @@ mrn="MRN_"
 mfr="mfr"
 df_final = pd.DataFrame()
 stage_error = False
+mfg_result = None
+null_query_output = False
 job_id = None
 meta_info = []
 for entry in schema_data:
@@ -224,53 +241,89 @@ for entry in schema_data:
 
             if key == "read":
                 seq = ["MRN","RAF"]
-                for cde in seq:
-                    tmp_mfg_result = postgres_query(jdbc_url,mtf_db,schema,table,action="read",code = cde)
+                for status in seq:
+                    tmp_mfg_result = postgres_query(jdbc_url,mtf_db,schema,table,action="read",code = status)
                     
                     if tmp_mfg_result.count() != 0:
                         mfg_result = tmp_mfg_result if start == False else mfg_result.union(tmp_mfg_result)
                         start = True
                 if mfg_result.count() != 0:
-                    mfr_list = [row for row  in mfg_result.select("MANUFACTURER_ID", "MANUFACTURER_NAME", "DRUG_ID").distinct().collect()]
-                    if len(mfr_list) == 0:
-                        print("No records found in the result")
-                        stage_error = True
+                    df_cols = mfg_result.columns
+                    df_mfr_names = mfg_result.select("MANUFACTURER_NAME").distinct()
+                    exist_mfr_set = set(row["MANUFACTURER_NAME"] for row in df_mfr_names.collect())
+                    missing_mfr_names = set(mfr_items) - exist_mfr_set
+                    if len(missing_mfr_names) != 0:
+                        new_rows = [
+                            {"manufacturer_name": mfr, "transaction_cd": 99, "drug_id" : "00"}
+                            for mfr in missing_mfr_names
+                        ]
+                        new_df = spark.createDataFrame(new_rows)
+                    # else:
+
+                else:
+                    null_query_output = True
+                    df_cols = ['mtf_icn', 'mtf_xref_icn', 'received_dt', 'process_dt', 
+                               'transaction_cd', 'medicare_src_of_coverage', 'srvc_dt', 
+                               'rx_srvc_ref_num', 'fill_num', 'srvc_prvdr_id_qualifier', 
+                               'srvc_prvdr_id', 'prescriber_id', 'ndc_cd', 'drug_id', 
+                               'quantity_dispensed', 'days_supply', '340b_INDICATOR', 
+                               'submt_contract', 'wac', 'mfp', 'sdra', 'srvc_prvdr_pymt_pref', 
+                               'prev_ndc_cd', 'prev_pymt_amt', 'prev_pymt_dt', 'prev_pymt_quantity', 
+                               'prev_pymt_mthd_cd', 'mra_err_cd_1', 'mra_err_cd_2', 'mra_err_cd_3', 
+                               'mra_err_cd_4', 'mra_err_cd_5', 'mra_err_cd_6', 'mra_err_cd_7', 
+                               'mra_err_cd_8', 'mra_err_cd_9', 'mra_err_cd_10', 'mtf_pm_ind', 
+                               'pymt_mthd_cd', 'pymt_amt', 'pymt_ts', 'manufacturer_id', 
+                               'manufacturer_name', 'received_id']
+                    new_rows = [
+                            {"manufacturer_name": mfr, "transaction_cd": 99, "drug_id" : "00"}
+                            for mfr in mfr_codes
+                        ]
+                    new_df = spark.createDataFrame(new_rows)
+                if new_df in locals:
+                    for col in df_cols:
+                        if col not in new_df.columns:
+                            new_df = new_df.withColumn(col, lit(None))
+                    new_df = new_df.select(df_cols)
+                    mfg_result = mfg_result.unionByName(new_df)
+                mfr_list = [row for row in mfg_result.select("MANUFACTURER_ID", "MANUFACTURER_NAME", "DRUG_ID").distinct().collect()]
+                for row in mfr_list:
+                    drug_value = row["DRUG_ID"]
+                    id_value = row["MANUFACTURER_ID"]
+                    mfg_name_value = row["MANUFACTURER_NAME"]
+                    s3_folder_mfr = mfg_name_value.replace(" ","_").replace("-","_").lower()
+                    s3_folder_mfr_upper = s3_folder_mfr.upper()
+                    df_filtered = mfg_result.filter((col("MANUFACTURER_ID") == id_value) & (col("DRUG_ID") == drug_value))
+                    ts = datetime.datetime.today().strftime("%Y%m%d.%H%M%S")
+                    file_name=f"{id_value}_{drug_value}_MRN_{env}_{ts}.parquet"
+                    file_path = f"{mfg_name_value}-{id_value}/mrn/outbound/{id_value}_{drug_value}_MRN_{env}T_{ts}.parquet"
+                    df = df_filtered.toPandas()
+                    df = df.sort_values(by="SRVC_PRVDR_ID")
+                    columns_to_remove = ["MANUFACTURER_ID","MANUFACTURER_NAME","RECEIVED_ID","DRUG_ID","RECEIVED_DT"]
+                    df_parquet = df.drop(columns=columns_to_remove)
+                    df_parquet.to_parquet(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet")
+                    bucket_name = s3_bucket
+                    meta_file_size = os.path.getsize(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet")
+                    s3_client = boto3.client('s3')
+                    s3_client.upload_file(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet", bucket_name, file_path)
+                    job_id = get_GlueJob_id()
+                    meta_info.append([job_id,"004",file_name,meta_file_size,id_value,df.shape[0],"COMPLETED",-1])
+                    df.columns = df.columns.str.lower()
+                    df = df.ffill('process_dt')
+                    if df_final.empty:
+                        df_final = df
                     else:
-                        for row in mfr_list:
-                            drug_value = row["DRUG_ID"]
-                            id_value = row["MANUFACTURER_ID"]
-                            mfg_name_value = row["MANUFACTURER_NAME"]
-                            s3_folder_mfr = mfg_name_value.replace(" ","_").replace("-","_").lower()
-                            s3_folder_mfr_upper = s3_folder_mfr.upper()
-                            df_filtered = mfg_result.filter((col("MANUFACTURER_ID") == id_value) & (col("DRUG_ID") == drug_value))
-                            ts = datetime.datetime.today().strftime("%Y%m%d.%H%M%S")
-                            file_name=f"{id_value}_{drug_value}_MRN_{env}_{ts}.parquet"
-                            file_path = f"{mfr}-{id_value}/mrn/outbound/{id_value}_{drug_value}_MRN_{env}_{ts}.parquet"
-                            df = df_filtered.toPandas()
-                            df = df.sort_values(by="SRVC_PRVDR_ID")
-                            columns_to_remove = ["MANUFACTURER_ID","MANUFACTURER_NAME","RECEIVED_ID","DRUG_ID","RECEIVED_DT"]
-                            df_parquet = df.drop(columns=columns_to_remove)
-                            df_parquet.to_parquet(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet")
-                            bucket_name = s3_bucket
-                            meta_file_size = os.path.getsize(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet")
-                            s3_client = boto3.client('s3')
-                            s3_client.upload_file(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet", bucket_name, file_path)
-                            job_id = get_GlueJob_id()
-                            meta_info.append([job_id,"004",file_name,meta_file_size,id_value,df.shape[0],"COMPLETED",-1])
-                            df.columns = df.columns.str.lower()
-                            if df_final.empty:
-                                df_final = df
-                            else:
-                                df_final = pd.concat([df_final,df])
+                        df_final = pd.concat([df_final,df])
             elif key == "update":
-                df_final["update_ts"] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-                df_final["update_user_id"] = -1
-                df_final['received_dt']= df_final['received_dt'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
-                df_final['process_dt']= df_final['process_dt'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
-                claim_id = df_final[['update_ts','update_user_id','process_dt','mtf_icn','received_dt']].values.tolist()
-                postgres_query(jdbc_url,mtf_db,schema,table,id = claim_id, action="update")
+                if null_query_output == False:
+                    df_final["update_ts"] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                    df_final["update_user_id"] = -1
+                    df_final['received_dt']= df_final['received_dt'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
+                    df_final['process_dt']= df_final['process_dt'].apply(lambda x: pd.to_datetime(x).strftime('%Y-%m-%d'))
+                    claim_id = df_final[['update_ts','update_user_id','process_dt','mtf_icn','received_dt']].values.tolist()
+                    postgres_query(jdbc_url,mtf_db,schema,table,id = claim_id, action="update")
             elif key == "insert":
-                postgres_query(jdbc_url,mtf_db,schema,table,action="insert", dat=df_final)
+                if null_query_output == False:
+                    postgres_query(jdbc_url,mtf_db,schema,table,action="insert", dat=df_final)
             elif key == "meta":
                 meta_cols = ["job_run_id","claim_file_type_cd","claim_file_name","claim_file_size","mfr_id","file_rec_cnt","claim_file_stus_cd","insert_user_id"]
                 meta_df = pd.DataFrame(meta_info, columns=meta_cols)

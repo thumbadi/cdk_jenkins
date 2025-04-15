@@ -1,27 +1,42 @@
-CREATE TABLE claim.mtf_claim_mra (
-	mra_received_dt date DEFAULT CURRENT_DATE NOT NULL,
-	mra_received_id int8 DEFAULT nextval('claim.mra_received_id_seq'::regclass) NOT NULL,
-	claim_received_dt date NOT NULL,
-	claim_received_id int8 NOT NULL,
-	claim_file_metadata_id int8 NOT NULL,
-	internal_claim_num varchar(30) NOT NULL,
-	mra_mtfpm_yn bool NULL,
-	mra_rfnd_calc_mthd_cd varchar(3) NULL,
-	mra_rfnd_amt numeric(38, 2) NULL,
-	mra_rfnd_ts timestamp(6) NULL,
-	mra_stus_cd varchar(3) NULL,
-	mra_error_cd_1 varchar(3) NULL,
-	mra_error_cd_2 varchar(3) NULL,
-	mra_error_cd_3 varchar(3) NULL,
-	mra_error_cd_4 varchar(3) NULL,
-	mra_error_cd_5 varchar(3) NULL,
-	mra_error_cd_6 varchar(3) NULL,
-	mra_error_cd_7 varchar(3) NULL,
-	mra_error_cd_8 varchar(3) NULL,
-	mra_error_cd_9 varchar(3) NULL,
-	mra_error_cd_10 varchar(3) NULL,
+CREATE TABLE shared.mfr_dtl (
+	mfr_id int8 NOT NULL,
+	mfr_name varchar(200) NOT NULL,
+	mfr_eff_dt date NULL,
+	mfr_end_dt date NULL,
 	insert_user_id int8 NOT NULL,
 	insert_ts timestamp(6) DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	update_user_id int8 NULL,
 	update_ts timestamp(6) NULL,
-)
+	mfr_ref_id varchar(30) NULL,
+	CONSTRAINT mfr_dtl_pk PRIMARY KEY (mfr_id)
+);
+INSERT INTO shared.mfr_dtl
+(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
+VALUES(10, 'Bristol Myers Squibb', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.102', NULL, NULL, 'M001');
+INSERT INTO shared.mfr_dtl
+(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
+VALUES(11, 'Immunex Corporation', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.151', NULL, NULL, 'M002');
+INSERT INTO shared.mfr_dtl
+(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
+VALUES(12, 'Novartis Pharms Corp', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.191', NULL, NULL, 'M003');
+INSERT INTO shared.mfr_dtl
+(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
+VALUES(13, 'AstraZeneca AB', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.230', NULL, NULL, 'M004');
+INSERT INTO shared.mfr_dtl
+(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
+VALUES(19, 'Pharmacyclics LLC', '2025-01-01', NULL, 1, '2025-02-24 17:46:26.861', NULL, NULL, 'M005');
+INSERT INTO shared.mfr_dtl
+(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
+VALUES(15, 'Merck Sharp Dohme', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.319', NULL, NULL, 'M006');
+INSERT INTO shared.mfr_dtl
+(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
+VALUES(16, 'Boehringer Ingelheim', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.368', NULL, NULL, 'M007');
+INSERT INTO shared.mfr_dtl
+(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
+VALUES(17, 'Novo Nordisk Inc', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.417', NULL, NULL, 'M008');
+INSERT INTO shared.mfr_dtl
+(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
+VALUES(14, 'Janssen Biotech, Inc.', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.269', NULL, NULL, 'M009');
+INSERT INTO shared.mfr_dtl
+(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
+VALUES(18, 'Janssen Pharms', '2025-01-01', NULL, 1, '2025-02-24 17:46:01.964', NULL, NULL, 'M010');

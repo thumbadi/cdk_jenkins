@@ -242,7 +242,6 @@ if match:
     host= match.group(1)
 
 mrn="MRN_"
-mfr="mfr"
 df_final = pd.DataFrame()
 stage_error = False
 mfg_result = None
@@ -320,7 +319,7 @@ for entry in schema_data:
                     df_filtered = mfg_result.filter((col("MANUFACTURER_ID") == id_value) & (col("DRUG_ID") == drug_value))
                     ts = datetime.datetime.today().strftime("%Y%m%d.%H%M%S")
                     file_name=f"{id_value}_{drug_value}_MRN_{env}_{ts}.parquet"
-                    file_path = f"{mfg_name_value}-{id_value}/mrn/outbound/{id_value}_{drug_value}_MRN_{env}T_{ts}.parquet"
+                    file_path = f"mfr-{id_value}/mrn/outbound/{id_value}_{drug_value}_MRN_{env}_{ts}.parquet"
                     df = df_filtered.toPandas()
                     df = df.sort_values(by="SRVC_PRVDR_ID")
                     columns_to_remove = ["MANUFACTURER_ID","MANUFACTURER_NAME","RECEIVED_ID","DRUG_ID","RECEIVED_DT"]

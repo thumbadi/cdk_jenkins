@@ -38,7 +38,19 @@ job.init(args['JOB_NAME'], args)
 def postgres_query(jdbc_url,mtf_db,schema,table,**kwargs):
     seq = kwargs.get("action")
     code = kwargs.get("code")
-    if seq == "read":
+    if seq == "mfr_read":
+        query = f"""
+                (SELECT mfr_id, mfr_name from shared.mfr_dtl)
+                            """
+        df = spark.read.format("jdbc") \
+            .option("url", f"{jdbc_url}") \
+            .option("dbtable", query) \
+            .option("user", mtf_secret['username']) \
+            .option("password", mtf_secret['password']) \
+            .option("driver", "org.postgresql.Driver") \
+            .load()
+        return df
+    elif seq == "read":
         if code == "MRN":
             query = f"""(select c.internal_claim_num as "MTF_ICN", c.xref_internal_claim_num as "MTF_XREF_ICN", c.received_dt as "RECEIVED_DT", coalesce(c.mrn_process_dt, CURRENT_DATE) as "PROCESS_DT", 
 case when c.src_claim_type_cd = 'O' then '01' else null end as "TRANSACTION_CD", c.medicare_src_of_coverage as "MEDICARE_SRC_OF_COVERAGE", c.srvc_dt as "SRVC_DT", 
@@ -176,6 +188,11 @@ def get_GlueJob_id():
     
 schema_data =  [
     {
+    "mfr_read" : {
+            "table_name" : "mfr_dtl",
+            "schema" : "claim"
+    }},    
+    {
     "read" : {
             "table_name" : "mtf_claim",
             "schema" : "claim"
@@ -193,21 +210,21 @@ schema_data =  [
         "schema" : "claim"
     }}
     ]
-mfr_items = ["Bristol Myers Squibb","Immunex Corporation","Novartis Pharms Corp","AstraZeneca AB"
-             "Merck Sharp Dohme","Janssen Biotech, Inc.","Boehringer Ingelheim","Novo Nordisk Inc",
-             "Janssen Pharms","Pharmacyclics LLC","Janssen Pharms"]    
-mfr_codes = {
-    "Bristol Myers Squibb" : 10,
-    "Immunex Corporation" : 11,
-    "Novartis Pharms Corp" : 12,
-    "AstraZeneca AB" : 13,
-    "Merck Sharp Dohme" : 15,
-    "Janssen Biotech, Inc." : 14,
-    "Boehringer Ingelheim" : 16,
-    "Novo Nordisk Inc" : 17,
-    "Janssen Pharms" : 18,
-    "Pharmacyclics LLC" : 19
-} 
+# mfr_items = ["Bristol Myers Squibb","Immunex Corporation","Novartis Pharms Corp","AstraZeneca AB"
+#              "Merck Sharp Dohme","Janssen Biotech, Inc.","Boehringer Ingelheim","Novo Nordisk Inc",
+#              "Janssen Pharms","Pharmacyclics LLC","Janssen Pharms"]    
+# mfr_codes = {
+#     "Bristol Myers Squibb" : 10,
+#     "Immunex Corporation" : 11,
+#     "Novartis Pharms Corp" : 12,
+#     "AstraZeneca AB" : 13,
+#     "Merck Sharp Dohme" : 15,
+#     "Janssen Biotech, Inc." : 14,
+#     "Boehringer Ingelheim" : 16,
+#     "Novo Nordisk Inc" : 17,
+#     "Janssen Pharms" : 18,
+#     "Pharmacyclics LLC" : 19
+# } 
 
 mtf_connection = glue_client.get_connection(Name='MTFDMDataConnector')
 mtf_connection_options = mtf_connection['Connection']['ConnectionProperties']
@@ -238,8 +255,12 @@ for entry in schema_data:
             schema = entry[key]["schema"]
             table = entry[key]["table_name"]        
             start = False
+            if key == "mfr_read":
+                mfr_dtl = postgres_query(jdbc_url,mtf_db,schema,table,action="mfr_read")
+                mfr_items = [row["mfr_name"] for row in mfr_dtl.collect()]
+                mfr_codes = {row["mfr_name"]: row["mfr_id"] for row in mfr_dtl.collect()}
 
-            if key == "read":
+            elif key == "read":
                 seq = ["MRN","RAF"]
                 for status in seq:
                     tmp_mfg_result = postgres_query(jdbc_url,mtf_db,schema,table,action="read",code = status)
@@ -254,7 +275,7 @@ for entry in schema_data:
                     missing_mfr_names = set(mfr_items) - exist_mfr_set
                     if len(missing_mfr_names) != 0:
                         new_rows = [
-                            {"manufacturer_name": mfr, "transaction_cd": 99, "drug_id" : "00"}
+                            {"manufacturer_name": mfr, "manufacturer_id": mfr_codes[mfr],"transaction_cd": 99, "drug_id" : "00"}
                             for mfr in missing_mfr_names
                         ]
                         new_df = spark.createDataFrame(new_rows)
@@ -275,16 +296,20 @@ for entry in schema_data:
                                'pymt_mthd_cd', 'pymt_amt', 'pymt_ts', 'manufacturer_id', 
                                'manufacturer_name', 'received_id']
                     new_rows = [
-                            {"manufacturer_name": mfr, "transaction_cd": 99, "drug_id" : "00"}
-                            for mfr in mfr_codes
+                            {"manufacturer_name": mfr, "manufacturer_id": code,"transaction_cd": 99, "drug_id" : "00"}
+                            for mfr,code in mfr_codes
                         ]
                     new_df = spark.createDataFrame(new_rows)
-                if new_df in locals:
+                if 'new_df' in locals():
                     for col in df_cols:
                         if col not in new_df.columns:
                             new_df = new_df.withColumn(col, lit(None))
                     new_df = new_df.select(df_cols)
-                    mfg_result = mfg_result.unionByName(new_df)
+                    import pyspark.sql
+                    if isinstance(mfg_result, pyspark.sql.DataFrame):
+                        mfg_result = mfg_result.unionByName(new_df)
+                    else:
+                        mfg_result = new_df
                 mfr_list = [row for row in mfg_result.select("MANUFACTURER_ID", "MANUFACTURER_NAME", "DRUG_ID").distinct().collect()]
                 for row in mfr_list:
                     drug_value = row["DRUG_ID"]

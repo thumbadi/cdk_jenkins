@@ -70,7 +70,7 @@ where c.mtf_curr_claim_stus_ref_cd = 'MRN')
                             """
         elif code == "RAF":
             query = f"""
-                    (select c.internal_claim_num as "MTF_ICN", c.xref_internal_claim_num as "MTF_XREF_ICN", c.received_dt as "RECEIVED_DT", coalesce(c.mrn_process_dt, CURRENT_DATE) as "PROCESS_DT",
+                    (select c.internal_claim_num as "MTF_ICN", c.xref_internal_claim_num as "MTF_XREF_ICN", c.received_dt as "RECEIVED_DT", null as "PROCESS_DT",
 case when c.src_claim_type_cd = 'O' then '01' else null end as "TRANSACTION_CD", c.medicare_src_of_coverage as "MEDICARE_SRC_OF_COVERAGE", c.srvc_dt as "SRVC_DT",
 c.rx_srvc_ref_num as "RX_SRVC_REF_NUM", coalesce(c.fill_num,'0') as "FILL_NUM", '01' as "SRVC_PRVDR_ID_QUALIFIER", c.srvc_npi_num as "SRVC_PRVDR_ID",
 c.prescriber_id as "PRESCRIBER_ID", c.ndc_cd as "NDC_CD", (select drug_id from shared.ndc ndc where ndc.ndc_cd = c.ndc_cd) as "DRUG_ID", c.quantity_dispensed as "QUANTITY_DISPENSED",
@@ -78,7 +78,7 @@ c.days_supply  as "DAYS_SUPPLY", c.indicator_340b_yn as "340b_INDICATOR", c.orig
 b.sdra_amt as "SDRA", a.pymt_pref as "SRVC_PRVDR_PYMT_PREF", null as "PREV_NDC_CD", null as "PREV_PYMT_AMT", null as "PREV_PYMT_DT", null as "PREV_PYMT_QUANTITY", null as "PREV_PYMT_MTHD_CD",
 e.mra_error_cd_1 as "MRA_ERR_CD_1", e.mra_error_cd_2 as "MRA_ERR_CD_2", e.mra_error_cd_3 as "MRA_ERR_CD_3", e.mra_error_cd_4 as "MRA_ERR_CD_4", e.mra_error_cd_5 as "MRA_ERR_CD_5",
 e.mra_error_cd_6 as "MRA_ERR_CD_6", e.mra_error_cd_7 as "MRA_ERR_CD_7", e.mra_error_cd_8 as "MRA_ERR_CD_8", e.mra_error_cd_9 as "MRA_ERR_CD_9", e.mra_error_cd_10 as "MRA_ERR_CD_10",
-null as "MTF_PM_IND", null as "PYMT_MTHD_CD", null as "PYMT_AMT", null as "PYMT_TS", d.mfr_id as "MANUFACTURER_ID", d.mfr_name as "MANUFACTURER_Name", null as "RECEIVED_ID"
+null as "MTF_PM_IND", null as "PYMT_MTHD_CD", null as "PYMT_AMT", null as "PYMT_TS", d.mfr_id as "MANUFACTURER_ID", d.mfr_name as "MANUFACTURER_NAME", b.received_id as "RECEIVED_ID"
 from claim.mtf_claim c join claim.mtf_claim_de_tpse a on a.received_dt = c.received_dt and a.received_id = c.received_id
      join  claim.mtf_claim_pricing b on b.received_dt = c.received_dt and b.received_id = c.received_id
      join  claim.mtf_claim_manufacturer d on d.received_dt = c.received_dt and d.received_id = c.received_id
@@ -190,7 +190,7 @@ schema_data =  [
     {
     "mfr_read" : {
             "table_name" : "mfr_dtl",
-            "schema" : "claim"
+            "schema" : "shared"
     }},    
     {
     "read" : {
@@ -210,21 +210,6 @@ schema_data =  [
         "schema" : "claim"
     }}
     ]
-# mfr_items = ["Bristol Myers Squibb","Immunex Corporation","Novartis Pharms Corp","AstraZeneca AB"
-#              "Merck Sharp Dohme","Janssen Biotech, Inc.","Boehringer Ingelheim","Novo Nordisk Inc",
-#              "Janssen Pharms","Pharmacyclics LLC","Janssen Pharms"]    
-# mfr_codes = {
-#     "Bristol Myers Squibb" : 10,
-#     "Immunex Corporation" : 11,
-#     "Novartis Pharms Corp" : 12,
-#     "AstraZeneca AB" : 13,
-#     "Merck Sharp Dohme" : 15,
-#     "Janssen Biotech, Inc." : 14,
-#     "Boehringer Ingelheim" : 16,
-#     "Novo Nordisk Inc" : 17,
-#     "Janssen Pharms" : 18,
-#     "Pharmacyclics LLC" : 19
-# } 
 
 mtf_connection = glue_client.get_connection(Name='MTFDMDataConnector')
 mtf_connection_options = mtf_connection['Connection']['ConnectionProperties']

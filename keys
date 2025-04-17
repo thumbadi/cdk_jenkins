@@ -10,6 +10,17 @@ CREATE TABLE shared.mfr_dtl (
 	mfr_ref_id varchar(30) NULL,
 	CONSTRAINT mfr_dtl_pk PRIMARY KEY (mfr_id)
 );
+
+
+Answer received: !yv
+missing_mfr_names***************
+{'Boehringer Ingelheim', 'Janssen Biotech, Inc.'}
+
+
+           mtf_icn     mtf_xref_icn received_dt  process_dt transaction_cd medicare_src_of_coverage     srvc_dt rx_srvc_ref_num  fill_num ncpdp_id  srvc_prvdr_id prescriber_id       ndc_cd drug_id quantity_dispensed  days_supply  340b_indicator submt_contract         wac         mfp      sdra srvc_prvdr_pymt_pref prev_ndc_cd prev_pymt_amt prev_pymt_dt prev_pymt_quantity prev_pymt_mthd_cd mra_err_cd_1 mra_err_cd_2 mra_err_cd_3 mra_err_cd_4 mra_err_cd_5 mra_err_cd_6 mra_err_cd_7 mra_err_cd_8 mra_err_cd_9 mra_err_cd_10 mtf_pm_ind pymt_mthd_cd pymt_amt pymt_ts manufacturer_id    manufacturer_name  received_id
+0  002505500000270  002505500000270  2025-02-24  2025-04-17             01                    PartD  2025-01-30    000006690308         0  4229628     1306164413    1740361302  58406001001   D2602             60.000           30           False          S5660   642.90000   29.110000  36827.37                Check        None          None         None               None              None         None        
+
+
 INSERT INTO shared.mfr_dtl
 (mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
 VALUES(10, 'Bristol Myers Squibb', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.102', NULL, NULL, 'M001');

@@ -70,7 +70,7 @@ where c.mtf_curr_claim_stus_ref_cd = 'MRN')
                             """
         elif code == "RAF":
             query = f"""
-                    (select c.internal_claim_num as "MTF_ICN", c.xref_internal_claim_num as "MTF_XREF_ICN", c.received_dt as "RECEIVED_DT", null as "PROCESS_DT",
+                    (select c.internal_claim_num as "MTF_ICN", c.xref_internal_claim_num as "MTF_XREF_ICN", c.received_dt as "RECEIVED_DT", coalesce(c.mrn_process_dt, CURRENT_DATE) as "PROCESS_DT",
 case when c.src_claim_type_cd = 'O' then '01' else null end as "TRANSACTION_CD", c.medicare_src_of_coverage as "MEDICARE_SRC_OF_COVERAGE", c.srvc_dt as "SRVC_DT",
 c.rx_srvc_ref_num as "RX_SRVC_REF_NUM", coalesce(c.fill_num,'0') as "FILL_NUM", '01' as "SRVC_PRVDR_ID_QUALIFIER", c.srvc_npi_num as "SRVC_PRVDR_ID",
 c.prescriber_id as "PRESCRIBER_ID", c.ndc_cd as "NDC_CD", (select drug_id from shared.ndc ndc where ndc.ndc_cd = c.ndc_cd) as "DRUG_ID", c.quantity_dispensed as "QUANTITY_DISPENSED",
@@ -78,7 +78,7 @@ c.days_supply  as "DAYS_SUPPLY", c.indicator_340b_yn as "340b_INDICATOR", c.orig
 b.sdra_amt as "SDRA", a.pymt_pref as "SRVC_PRVDR_PYMT_PREF", null as "PREV_NDC_CD", null as "PREV_PYMT_AMT", null as "PREV_PYMT_DT", null as "PREV_PYMT_QUANTITY", null as "PREV_PYMT_MTHD_CD",
 e.mra_error_cd_1 as "MRA_ERR_CD_1", e.mra_error_cd_2 as "MRA_ERR_CD_2", e.mra_error_cd_3 as "MRA_ERR_CD_3", e.mra_error_cd_4 as "MRA_ERR_CD_4", e.mra_error_cd_5 as "MRA_ERR_CD_5",
 e.mra_error_cd_6 as "MRA_ERR_CD_6", e.mra_error_cd_7 as "MRA_ERR_CD_7", e.mra_error_cd_8 as "MRA_ERR_CD_8", e.mra_error_cd_9 as "MRA_ERR_CD_9", e.mra_error_cd_10 as "MRA_ERR_CD_10",
-null as "MTF_PM_IND", null as "PYMT_MTHD_CD", null as "PYMT_AMT", null as "PYMT_TS", d.mfr_id as "MANUFACTURER_ID", d.mfr_name as "MANUFACTURER_NAME", b.received_id as "RECEIVED_ID"
+null as "MTF_PM_IND", null as "PYMT_MTHD_CD", null as "PYMT_AMT", null as "PYMT_TS", d.mfr_id as "MANUFACTURER_ID", d.mfr_name as "MANUFACTURER_Name", null as "RECEIVED_ID"
 from claim.mtf_claim c join claim.mtf_claim_de_tpse a on a.received_dt = c.received_dt and a.received_id = c.received_id
      join  claim.mtf_claim_pricing b on b.received_dt = c.received_dt and b.received_id = c.received_id
      join  claim.mtf_claim_manufacturer d on d.received_dt = c.received_dt and d.received_id = c.received_id
@@ -190,7 +190,7 @@ schema_data =  [
     {
     "mfr_read" : {
             "table_name" : "mfr_dtl",
-            "schema" : "shared"
+            "schema" : "claim"
     }},    
     {
     "read" : {
@@ -210,6 +210,21 @@ schema_data =  [
         "schema" : "claim"
     }}
     ]
+# mfr_items = ["Bristol Myers Squibb","Immunex Corporation","Novartis Pharms Corp","AstraZeneca AB"
+#              "Merck Sharp Dohme","Janssen Biotech, Inc.","Boehringer Ingelheim","Novo Nordisk Inc",
+#              "Janssen Pharms","Pharmacyclics LLC","Janssen Pharms"]    
+# mfr_codes = {
+#     "Bristol Myers Squibb" : 10,
+#     "Immunex Corporation" : 11,
+#     "Novartis Pharms Corp" : 12,
+#     "AstraZeneca AB" : 13,
+#     "Merck Sharp Dohme" : 15,
+#     "Janssen Biotech, Inc." : 14,
+#     "Boehringer Ingelheim" : 16,
+#     "Novo Nordisk Inc" : 17,
+#     "Janssen Pharms" : 18,
+#     "Pharmacyclics LLC" : 19
+# } 
 
 mtf_connection = glue_client.get_connection(Name='MTFDMDataConnector')
 mtf_connection_options = mtf_connection['Connection']['ConnectionProperties']
@@ -252,10 +267,10 @@ for entry in schema_data:
                     if tmp_mfg_result.count() != 0:
                         mfg_result = tmp_mfg_result if start == False else mfg_result.union(tmp_mfg_result)
                         start = True
-                if mfg_result.count() != 0:
+                if mfg_result is not None:
                     df_cols = mfg_result.columns
-                    df_mfr_names = mfg_result.select("MANUFACTURER_NAME").distinct()
-                    exist_mfr_set = set(row["MANUFACTURER_NAME"] for row in df_mfr_names.collect())
+                    df_mfr_names = mfg_result.select("manufacturer_name").distinct()
+                    exist_mfr_set = set(row["manufacturer_name"] for row in df_mfr_names.collect())
                     missing_mfr_names = set(mfr_items) - exist_mfr_set
                     if len(missing_mfr_names) != 0:
                         new_rows = [
@@ -263,8 +278,7 @@ for entry in schema_data:
                             for mfr in missing_mfr_names
                         ]
                         new_df = spark.createDataFrame(new_rows)
-                    # else:
-
+       
                 else:
                     null_query_output = True
                     df_cols = ['mtf_icn', 'mtf_xref_icn', 'received_dt', 'process_dt', 
@@ -281,12 +295,13 @@ for entry in schema_data:
                                'manufacturer_name', 'received_id']
                     new_rows = [
                             {"manufacturer_name": mfr, "manufacturer_id": code,"transaction_cd": 99, "drug_id" : "00"}
-                            for mfr,code in mfr_codes
+                            for mfr,code in mfr_codes.items()
                         ]
                     new_df = spark.createDataFrame(new_rows)
+
                 if 'new_df' in locals():
-                    for col in df_cols:
-                        if col not in new_df.columns:
+                    for column in df_cols:
+                        if column not in new_df.columns:
                             new_df = new_df.withColumn(col, lit(None))
                     new_df = new_df.select(df_cols)
                     import pyspark.sql
@@ -294,20 +309,21 @@ for entry in schema_data:
                         mfg_result = mfg_result.unionByName(new_df)
                     else:
                         mfg_result = new_df
-                mfr_list = [row for row in mfg_result.select("MANUFACTURER_ID", "MANUFACTURER_NAME", "DRUG_ID").distinct().collect()]
+                mfr_list = [row for row in mfg_result.select('manufacturer_id', 'manufacturer_name', 'drug_id').distinct().collect()]
                 for row in mfr_list:
-                    drug_value = row["DRUG_ID"]
-                    id_value = row["MANUFACTURER_ID"]
-                    mfg_name_value = row["MANUFACTURER_NAME"]
+                    drug_value = row["drug_id"]
+                    id_value = row["manufacturer_id"]
+                    mfg_name_value = row["manufacturer_name"]
                     s3_folder_mfr = mfg_name_value.replace(" ","_").replace("-","_").lower()
                     s3_folder_mfr_upper = s3_folder_mfr.upper()
-                    df_filtered = mfg_result.filter((col("MANUFACTURER_ID") == id_value) & (col("DRUG_ID") == drug_value))
+                    df_filtered = mfg_result.filter((col("manufacturer_id") == id_value) & (col("drug_id") == drug_value))
                     ts = datetime.datetime.today().strftime("%Y%m%d.%H%M%S")
                     file_name=f"{id_value}_{drug_value}_MRN_{env}_{ts}.parquet"
-                    file_path = f"mfr-{id_value}/mrn/outbound/{id_value}_{drug_value}_MRN_{env}_{ts}.parquet"
+                    file_path = f"{mfg_name_value}-{id_value}/mrn/outbound/{file_name}"
                     df = df_filtered.toPandas()
-                    df = df.sort_values(by="SRVC_PRVDR_ID")
-                    columns_to_remove = ["MANUFACTURER_ID","MANUFACTURER_NAME","RECEIVED_ID","DRUG_ID","RECEIVED_DT"]
+                    df["process_dt"] = df["process_dt"].ffill()
+                    df = df.sort_values(by="srvc_prvdr_id")
+                    columns_to_remove = ['manufacturer_id', 'manufacturer_name', 'received_id', 'drug_id']
                     df_parquet = df.drop(columns=columns_to_remove)
                     df_parquet.to_parquet(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet")
                     bucket_name = s3_bucket
@@ -317,11 +333,12 @@ for entry in schema_data:
                     job_id = get_GlueJob_id()
                     meta_info.append([job_id,"004",file_name,meta_file_size,id_value,df.shape[0],"COMPLETED",-1])
                     df.columns = df.columns.str.lower()
-                    df = df.ffill('process_dt')
-                    if df_final.empty:
-                        df_final = df
-                    else:
-                        df_final = pd.concat([df_final,df])
+                    
+                    if null_query_output == False:
+                        if df_final.empty:
+                            df_final = df
+                        else:
+                            df_final = pd.concat([df_final,df])
             elif key == "update":
                 if null_query_output == False:
                     df_final["update_ts"] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]

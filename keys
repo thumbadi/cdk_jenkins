@@ -1,58 +1,43 @@
-CREATE TABLE shared.mfr_dtl (
-	mfr_id int8 NOT NULL,
-	mfr_name varchar(200) NOT NULL,
-	mfr_eff_dt date NULL,
-	mfr_end_dt date NULL,
-	insert_user_id int8 NOT NULL,
-	insert_ts timestamp(6) DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	update_user_id int8 NULL,
-	update_ts timestamp(6) NULL,
-	mfr_ref_id varchar(30) NULL,
-	CONSTRAINT mfr_dtl_pk PRIMARY KEY (mfr_id)
+CREATE TABLE de_tpse.de_tpse_payee_dtl (
+	org_type varchar(20) NULL,
+	de_id int8 NULL,
+	tpse_id int8 NULL,
+	payee_id varchar(20) NULL,
+	org_name varchar(200) NULL,
+	org_ftin_num varchar(10) NULL,
+	org_npi_num varchar(10) NULL,
+	profit_yn varchar(2) NULL,
+	pymt_pref_cd varchar(3) NULL,
+	pymt_routing_num varchar(9) NULL,
+	pymt_acct_num varchar(20) NULL,
+	pymt_acct_type varchar(20) NULL,
+	eff_dt date NULL,
+	end_dt date NULL,
+	pymt_adrs_cd varchar(100) NULL,
+	pymt_adrs_line_1 varchar(100) NULL,
+	pymt_adrs_line_2 varchar(100) NULL,
+	pymt_adrs_city varchar(100) NULL,
+	pymt_adrs_state varchar(2) NULL,
+	pymt_adrs_zip_code varchar(10) NULL,
+	contact_first_name varchar(200) NULL,
+	contact_last_name varchar(200) NULL,
+	contact_title varchar(100) NULL,
+	contact_phone_num_1 varchar(20) NULL,
+	contact_phone_num_2 varchar(20) NULL,
+	contact_email_adrs varchar(100) NULL,
+	refresh_ts timestamp NULL,
+	part_load_yn bool NULL,
+	xfr_req_yn bool NULL
 );
 
+INSERT INTO de_tpse.de_tpse_payee_dtl (org_type,de_id,tpse_id,payee_id,org_name,org_ftin_num,org_npi_num,profit_yn,pymt_pref_cd,pymt_routing_num,pymt_acct_num,pymt_acct_type,eff_dt,end_dt,pymt_adrs_cd,pymt_adrs_line_1,pymt_adrs_line_2,pymt_adrs_city,pymt_adrs_state,pymt_adrs_zip_code,contact_first_name,contact_last_name,contact_title,contact_phone_num_1,contact_phone_num_2,contact_email_adrs,refresh_ts,part_load_yn,xfr_req_yn) VALUES
+('Dispenser',123,NULL,'1234567890','Test Dispenser','A983938938','1234567890','P','EFT','212373890','34349830938393','CHKING',NULL,NULL,'PMT','123 Main St',NULL,'Fairfax','VA','23830','John','Doe','ASO','1273837383',NULL,'TestDe@DE.com','2025-04-20 17:41:01.592789',false,true);------------------------------
+--------------------------------------------------
+View table insert
 
-Answer received: !yv
-missing_mfr_names***************
-{'Boehringer Ingelheim', 'Janssen Biotech, Inc.'}
-
-
-           mtf_icn     mtf_xref_icn received_dt  process_dt transaction_cd medicare_src_of_coverage     srvc_dt rx_srvc_ref_num  fill_num ncpdp_id  srvc_prvdr_id prescriber_id       ndc_cd drug_id quantity_dispensed  days_supply  340b_indicator submt_contract         wac         mfp      sdra srvc_prvdr_pymt_pref prev_ndc_cd prev_pymt_amt prev_pymt_dt prev_pymt_quantity prev_pymt_mthd_cd mra_err_cd_1 mra_err_cd_2 mra_err_cd_3 mra_err_cd_4 mra_err_cd_5 mra_err_cd_6 mra_err_cd_7 mra_err_cd_8 mra_err_cd_9 mra_err_cd_10 mtf_pm_ind pymt_mthd_cd pymt_amt pymt_ts manufacturer_id    manufacturer_name  received_id
-0  002505500000270  002505500000270  2025-02-24  2025-04-17             01                    PartD  2025-01-30    000006690308         0  4229628     1306164413    1740361302  58406001001   D2602             60.000           30           False          S5660   642.90000   29.110000  36827.37                Check        None          None         None               None              None         None        
-
-
-INSERT INTO shared.mfr_dtl
-(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
-VALUES(10, 'Bristol Myers Squibb', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.102', NULL, NULL, 'M001');
-INSERT INTO shared.mfr_dtl
-(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
-VALUES(11, 'Immunex Corporation', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.151', NULL, NULL, 'M002');
-INSERT INTO shared.mfr_dtl
-(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
-VALUES(12, 'Novartis Pharms Corp', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.191', NULL, NULL, 'M003');
-INSERT INTO shared.mfr_dtl
-(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
-VALUES(13, 'AstraZeneca AB', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.230', NULL, NULL, 'M004');
-INSERT INTO shared.mfr_dtl
-(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
-VALUES(19, 'Pharmacyclics LLC', '2025-01-01', NULL, 1, '2025-02-24 17:46:26.861', NULL, NULL, 'M005');
-INSERT INTO shared.mfr_dtl
-(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
-VALUES(15, 'Merck Sharp Dohme', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.319', NULL, NULL, 'M006');
-INSERT INTO shared.mfr_dtl
-(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
-VALUES(16, 'Boehringer Ingelheim', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.368', NULL, NULL, 'M007');
-INSERT INTO shared.mfr_dtl
-(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
-VALUES(17, 'Novo Nordisk Inc', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.417', NULL, NULL, 'M008');
-INSERT INTO shared.mfr_dtl
-(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
-VALUES(14, 'Janssen Biotech, Inc.', '2025-01-01', NULL, 1, '2025-02-04 16:22:47.269', NULL, NULL, 'M009');
-INSERT INTO shared.mfr_dtl
-(mfr_id, mfr_name, mfr_eff_dt, mfr_end_dt, insert_user_id, insert_ts, update_user_id, update_ts, mfr_ref_id)
-VALUES(18, 'Janssen Pharms', '2025-01-01', NULL, 1, '2025-02-24 17:46:01.964', NULL, NULL, 'M010');
-
-  mtf_icn mtf_xref_icn received_dt process_dt transaction_cd medicare_src_of_coverage srvc_dt rx_srvc_ref_num  fill_num ncpdp_id  srvc_prvdr_id prescriber_id ndc_cd drug_id quantity_dispensed  days_supply 340b_indicator submt_contract   wac   mfp  sdra srvc_prvdr_pymt_pref prev_ndc_cd prev_pymt_amt prev_pymt_dt prev_pymt_quantity prev_pymt_mthd_cd mra_err_cd_1 mra_err_cd_2 mra_err_cd_3 mra_err_cd_4 mra_err_cd_5 mra_err_cd_6 mra_err_cd_7 mra_err_cd_8 mra_err_cd_9 mra_err_cd_10 mtf_pm_ind pymt_mthd_cd pymt_amt pymt_ts manufacturer_id      manufacturer_name  received_id
-0    None         None        None       None             99                     None    None            None       NaN     None            NaN          None   None      00               None          NaN           None           None  None  None  None                 None        None          None         None               None              None         None         None         None         None         None         None         None         N
-
-['MTF_ICN', 'MTF_XREF_ICN', 'RECEIVED_DT', 'PROCESS_DT', 'TRANSACTION_CD', 'MEDICARE_SRC_OF_COVERAGE', 'SRVC_DT', 'RX_SRVC_REF_NUM', 'FILL_NUM', 'SRVC_PRVDR_ID_QUALIFIER', 'SRVC_PRVDR_ID', 'PRESCRIBER_ID', 'NDC_CD', 'DRUG_ID', 'QUANTITY_DISPENSED', 'DAYS_SUPPLY', '340B_INDICATOR', 'SUBMT_CONTRACT', 'WAC', 'MFP', 'SDRA', 'SRVC_PRVDR_PYMT_PREF', 'PREV_NDC_CD', 'PREV_PYMT_AMT', 'PREV_PYMT_DT', 'PREV_PYMT_QUANTITY', 'PREV_PYMT_MTHD_CD', 'MRA_ERR_CD_1', 'MRA_ERR_CD_2', 'MRA_ERR_CD_3', 'MRA_ERR_CD_4', 'MRA_ERR_CD_5', 'MRA_ERR_CD_6', 'MRA_ERR_CD_7', 'MRA_ERR_CD_8', 'MRA_ERR_CD_9', 'MRA_ERR_CD_10', 'MTF_PM_IND', 'PYMT_MTHD_CD', 'PYMT_AMT', 'PYMT_TS', 'MANUFACTURER_ID', 'MANUFACTURER_NAME', 'RECEIVED_ID']
+INSERT INTO mfr.mfr_bank_file_vw
+(recordoperation, organizationcode, payeeid, organizationidentifier, organizationname, organizationlegalname, organizationtin, organizationtintype, profit_nonprofit, organizationnpi, paymentmode, routingtransitnumber, accountnumber, accounttype, effectivestartdate, effectiveenddate, addresscode, addressline1, addressline2, cityname, state, postalcode, contactcode, contactfirstname, contactlastname, contacttitle, contactphone, contactfax, contactotherphone, contactemail)
+VALUES('A', 'M', 'M009', 'M009', 'Janssen Biotech, Inc.', 'Janssen Biotech, Inc.', '00-0000000', 'EIN', 'P', NULL, 'EFT', '044000024', '00038372937', 'Savings', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'John', 'Sparks', NULL, NULL, NULL, NULL, NULL);
+INSERT INTO mfr.mfr_bank_file_vw
+(recordoperation, organizationcode, payeeid, organizationidentifier, organizationname, organizationlegalname, organizationtin, organizationtintype, profit_nonprofit, organizationnpi, paymentmode, routingtransitnumber, accountnumber, accounttype, effectivestartdate, effectiveenddate, addresscode, addressline1, addressline2, cityname, state, postalcode, contactcode, contactfirstname, contactlastname, contacttitle, contactphone, contactfax, contactotherphone, contactemail)
+VALUES('A', 'M', 'M001', 'M001', 'Bristol Myers Squibb', 'Bristol Myers Squibb', '00-0000000', 'EIN', 'P', NULL, 'EFT', 'ABCDEFJKL', '00123456789012345', 'Savings', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Joe', 'Doe', NULL, NULL, NULL, NULL, NULL);

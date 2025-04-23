@@ -34,6 +34,40 @@ INSERT INTO de_tpse.de_tpse_payee_dtl (org_type,de_id,tpse_id,payee_id,org_name,
 ('Dispenser',123,NULL,'1234567890','Test Dispenser','A983938938','1234567890','P','EFT','212373890','34349830938393','CHKING',NULL,NULL,'PMT','123 Main St',NULL,'Fairfax','VA','23830','John','Doe','ASO','1273837383',NULL,'TestDe@DE.com','2025-04-20 17:41:01.592789',false,true);------------------------------
 --------------------------------------------------
 View table insert
+--------------------------------------------------
+CREATE TABLE mfr.mfr_bank_file_vw (
+    recordoperation VARCHAR(1),
+    organizationcode VARCHAR(10),
+    payeeid VARCHAR(20),
+    organizationidentifier VARCHAR(20),
+    organizationname VARCHAR(100),
+    organizationlegalname VARCHAR(100),
+    organizationtin VARCHAR(15),
+    organizationtintype VARCHAR(10),
+    profit_nonprofit CHAR(1),
+    organizationnpi VARCHAR(20),
+    paymentmode VARCHAR(10),
+    routingtransitnumber VARCHAR(9),
+    accountnumber VARCHAR(20),
+    accounttype VARCHAR(20),
+    effectivestartdate DATE,
+    effectiveenddate DATE,
+    addresscode VARCHAR(20),
+    addressline1 VARCHAR(100),
+    addressline2 VARCHAR(100),
+    cityname VARCHAR(50),
+    state VARCHAR(2),
+    postalcode VARCHAR(10),
+    contactcode VARCHAR(20),
+    contactfirstname VARCHAR(50),
+    contactlastname VARCHAR(50),
+    contacttitle VARCHAR(50),
+    contactphone VARCHAR(20),
+    contactfax VARCHAR(20),
+    contactotherphone VARCHAR(20),
+    contactemail VARCHAR(100)
+);
+
 
 INSERT INTO mfr.mfr_bank_file_vw
 (recordoperation, organizationcode, payeeid, organizationidentifier, organizationname, organizationlegalname, organizationtin, organizationtintype, profit_nonprofit, organizationnpi, paymentmode, routingtransitnumber, accountnumber, accounttype, effectivestartdate, effectiveenddate, addresscode, addressline1, addressline2, cityname, state, postalcode, contactcode, contactfirstname, contactlastname, contacttitle, contactphone, contactfax, contactotherphone, contactemail)

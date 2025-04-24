@@ -68,6 +68,25 @@ CREATE TABLE mfr.mfr_bank_file_vw (
     contactemail VARCHAR(100)
 );
 
+CREATE OR REPLACE PROCEDURE claim.update_boolean_no()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE claim.de_tpse_payee_dtl
+    SET xfr_req_yn  = FALSE
+    WHERE xfr_req_yn = TRUE;  -- optional
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE claim.update_boolean_yes()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE claim.de_tpse_payee_dtl
+    SET xfr_req_yn  = TRUE
+    WHERE xfr_req_yn = FALSE;  -- optional
+END;
+$$;
 
 INSERT INTO mfr.mfr_bank_file_vw
 (recordoperation, organizationcode, payeeid, organizationidentifier, organizationname, organizationlegalname, organizationtin, organizationtintype, profit_nonprofit, organizationnpi, paymentmode, routingtransitnumber, accountnumber, accounttype, effectivestartdate, effectiveenddate, addresscode, addressline1, addressline2, cityname, state, postalcode, contactcode, contactfirstname, contactlastname, contacttitle, contactphone, contactfax, contactotherphone, contactemail)

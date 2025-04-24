@@ -12,15 +12,19 @@ from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from pyspark.sql.functions import col,lit
-from awsglue.utils import getResolvedOptions
 from awsglue.dynamicframe import DynamicFrame
 from awsglue.job import Job
 subprocess.call([sys.executable, "-m", "pip", "install", "--user", "psycopg2-binary"])
 import psycopg2
 import pandas as pd
 import numpy as np
-import os
+import os, re
+from urllib.parse import urlparse
 
+# logger = logging.getLogger()
+# logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+# logger.setLevel(logging.DEBUG)
+glue_client = boto3.client('glue')
 args = getResolvedOptions(sys.argv, ['JOB_NAME', 'MTF_DBNAME', 'S3_BUCKET', 'ENV'])
 
 sc = SparkContext()
@@ -29,33 +33,70 @@ spark = glueContext.spark_session
 job = Job(glueContext)
 job.init(args['JOB_NAME'], args)
 
-logger = logging.getLogger()
-logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
-logger.setLevel(logging.DEBUG)
-glue_client = boto3.client('glue')
-def postgres_query(jdbc_url,mtf_db,schema,table,**kwargs):    
+def batch_update(records, db):
+    """
+    Function to update records in PostgreSQL using executemany().
+    """
+    conn = psycopg2.connect(
+        dbname=db,
+        user=credentials['username'],
+        password=credentials['password'],
+        host=host,
+        port=5432
+    )
+    cursor = conn.cursor()
+    
+    query = """
+        UPDATE claim.mtf_claim \
+        SET mtf_curr_claim_stus_ref_cd = 'RCD' \
+        WHERE internal_claim_num = ANY(%s)
+    """
+    
+    data = [(row['internal_claim_num']) for row in records]
+    
+    if data:  # Prevent empty execution
+        cursor.executemany(query, data)
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
+def postgres_query(jdbc_url,mtf_db,schema,table,**kwargs):
     seq = kwargs.get("action")
-    if seq == "read_mfr":
-        query = f"""(select recordoperation AS "RecordOperation", organizationcode AS "OrganizationCode", payeeid AS "PayeeID", organizationidentifier AS "OrganizationIdentifier", organizationname AS "OrganizationName", organizationlegalname AS "OrganizationLegalName", organizationtin AS "OrganizationTIN", organizationtintype AS "OrganizationTINType", profit_nonprofit AS "Profit-Nonprofit", organizationnpi AS "OrganizationNPI", paymentmode AS "PaymentMode", routingtransitnumber AS "RoutingTransitNumber", accountnumber AS "AccountNumber", accounttype AS "AccountType", effectivestartdate AS "EffectiveStartDate", effectiveenddate AS "EffectiveEndDate", addresscode AS "AddressCode", addressline1 AS "AddressLine1", addressline2 AS "AddressLine2", cityname AS "CityName", state AS "State", postalcode AS "PostalCode", contactcode AS "ContactCode", contactfirstname AS "ContactFirstName", contactlastname AS "ContactLastName", contacttitle AS "ContactTitle", contactphone AS "ContactPhone", contactfax AS "ContactFax", contactotherphone AS "ContactOtherPhone", contactemail AS "ContactEmail"
-            from mfr.mfr_bank_file_vw)"""
-        df_mfr = spark.read.format("jdbc") \
+
+    if seq == "execute_sp":
+        proc_name = kwargs.get("prcd")    
+        conn = psycopg2.connect(
+        dbname=db,
+        user=mtf_secret['username'],
+        password=mtf_secret['password'],
+        host=host,
+        port=5432
+        )
+        conn.autocommit = True
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(f"CALL {schema}.{proc_name}();")  # Python waits here until it's done
+                print("Stored procedure completed successfully.")
+
+    elif seq == "read_table":
+        if table == "mfr_bank_file_vw":
+            query = f"""
+                    (select * from claim.mfr_bank_file_vw)
+                                """
+        else:
+            query = f"""
+                    (select * from claim.de_tpse_payee_dtl WHERE xfr_req_yn = true)
+                                """
+        df = spark.read.format("jdbc") \
             .option("url", f"{jdbc_url}") \
             .option("dbtable", query) \
-            .option("user", credentials['username']) \
-            .option("password", credentials['password']) \
+            .option("user", mtf_secret['username']) \
+            .option("password", mtf_secret['password']) \
             .option("driver", "org.postgresql.Driver") \
             .load()
-        return df_mfr
-    elif seq == "read_de_tpse":
-        query = f"""(SELECT org_type as "OrgType", de_id as "DespenserID", tpse_id as "TypeID", payee_id as "PayeeID", org_name as "OrganizationName", org_ftin_num as "OrganizationTIN", org_npi_num as "OrganizationNPI", profit_yn as "Profit-Nonprofit", pymt_pref_cd as "PaymentMode", pymt_routing_num as "RoutingTransitNumber", pymt_acct_num as "AccountNumber", pymt_acct_type as "AccountType", eff_dt as "EffectiveStartDate", end_dt as "EffectiveEndDate", pymt_adrs_cd as "AddressCode", pymt_adrs_line_1 as "AddressLine1", pymt_adrs_line_2 as "AddressLine2", pymt_adrs_city as "CityName", pymt_adrs_state as "State", pymt_adrs_zip_code as "PostalCode", contact_first_name as "ContactFirstName", contact_last_name as "ContactLastName", contact_title as "ContactTitle", contact_phone_num_1 as "ContactPhone", contact_phone_num_2 as "ContactOtherPhone", contact_email_adrs as "ContactEmail", xfr_req_yn FROM de_tpse.de_tpse_payee_dtl)"""
-        df_de_tpse = spark.read.format("jdbc") \
-            .option("url", f"{jdbc_url}") \
-            .option("dbtable", query) \
-            .option("user", credentials['username']) \
-            .option("password", credentials['password']) \
-            .option("driver", "org.postgresql.Driver") \
-            .load()
-        return df_de_tpse
+        return df
     
 def get_secret(secret_name):
     """Fetch secret from AWS Secrets Manager."""
@@ -82,65 +123,100 @@ def get_secret(secret_name):
         print(f"Error retrieving secret: {e}")
         raise e
 
+def get_GlueJob_id():
+    # Fetch latest running job
+    response = glue_client.get_job_runs(JobName=args['JOB_NAME'])
+    latest_job_run_id = response['JobRuns'][0]['Id'] if response['JobRuns'] else 'UNKNOWN'
+    return latest_job_run_id
+
+
 schema_data =  [
     {
-    "read_mfr" : {
-            "table_name" : "mfr_bank_file_vw",
-            "schema" : "mfr"
+    "execute_sp" : {
+            "table_name" : "",
+            "schema" : "claim"
     }},
     {
-    "read_de_tpse" : {
-            "table_name" : "de_tpse_payee_dtl",
-            "schema" : "de_tpse"
+    "read_table" : {
+            "table_name" : "",
+            "schema" : "claim"
+    }},
+    {
+    "meta" : {
+            "table_name" : "claim_file_metadata",
+            "schema" : "claim"
+    }},
+    {
+    "execute_sp" : {
+            "table_name" : "",
+            "schema" : "claim"
     }}
     ]
 
 mtf_connection = glue_client.get_connection(Name='MTFDMDataConnector')
-print(mtf_connection)
 mtf_connection_options = mtf_connection['Connection']['ConnectionProperties']
-print(mtf_connection_options)
 jdbc_url = mtf_connection['Connection']['ConnectionProperties']['JDBC_CONNECTION_URL']
-credentials=get_secret(mtf_connection_options['SECRET_ID'])
+mtf_secret=get_secret(mtf_connection_options['SECRET_ID'])
 mtf_db=args['MTF_DBNAME']
 s3_bucket=args['S3_BUCKET']
 env=args['ENV']
+parsed=urlparse(jdbc_url.replace("jdbc:", ""))
+port=parsed.port
+host=None
+pattern = r"([\w.-]+\.rds\.amazonaws\.com)"
+match = re.search(pattern, jdbc_url)
+if match:
+    host= match.group(1)
+
+bucket_name = "pyspark"
 stage_error = False
+sp_id = 0
+job_id = None
+meta_info = []
 for entry in schema_data:
     if stage_error == False:
         for key in entry.keys():        
             schema = entry[key]["schema"]
             table = entry[key]["table_name"]        
-            bucket_name = s3_bucket
-            if key == "read_mfr":
-                view_mfr_df = postgres_query(jdbc_url,mtf_db,schema,table,action="read_mfr")
-                if view_mfr_df.isEmpty() == False:
-                    ts = datetime.datetime.today().strftime("%Y%m%d_%H%M%S")
-                    file_path = f"bankfile/ready/MTFDM.{env}.BankData.{ts}.parquet"
-                    df_mfr = view_mfr_df.toPandas()
-                    df_mfr.to_parquet(f"/tmp/MTFDM.{env}.BankData.{ts}.parquet")
-                    s3_client = boto3.client('s3')
-                    s3_client.upload_file(f"/tmp/MTFDM.{env}.BankData.{ts}.parquet", bucket_name, file_path)
-                    
-                    logger.info('Parquet file has been created.')
-                    continue
+            if key == "execute_sp":
+                proc_list = ["update_boolean_column","update_boolean_no"]
+                if sp_id == 0:
+                    postgres_query("mtf",schema,table,action="execute_sp",prcd=proc_list[0])
+                    sp_id = 1
                 else:
-                    logger.info('No records found in mfr_bank_file_vw table.')
-                    stage_error = True
-            elif key == "read_de_tpse":
-                    view_detpse_df = postgres_query(jdbc_url,mtf_db,schema,table,action="read_de_tpse")
+                    postgres_query("mtf",schema,table,action="execute_sp",prcd=proc_list[1])
+                    # sp_id = 2
+            elif key == "read_table":
+                tbl_name = ['mfr_bank_file_vw','de_tpse_payee_dtl']
+                view_mfr_df = postgres_query("mtf",schema,tbl_name[0],action="read_table")
+                if view_mfr_df.isEmpty() == False:
+                    view_detpse_df = postgres_query("mtf",schema,tbl_name[1],action="read_table")
                     if view_detpse_df.isEmpty() == False:
+                        merged_df = view_mfr_df.unionByName(view_detpse_df, allowMissingColumns=True)
+                        merged_df = merged_df.drop("xfr_req_yn")
                         ts = datetime.datetime.today().strftime("%Y%m%d_%H%M%S")
+                        file_name = f"MTFDM.{env}.BankData.{ts}.parquet"
                         file_path = f"bankfile/ready/MTFDM.{env}.BankData.{ts}.parquet"
-                        df_mfr = view_detpse_df.toPandas()
-                        df_mfr.to_parquet(f"/tmp/MTFDM.{env}.BankData.{ts}.parquet")
+                        df = merged_df.toPandas()
+                        df.to_parquet(f"/tmp/MTFDM.{env}.BankData.{ts}.parquet")
+                        meta_file_size = os.path.getsize(f"/tmp/MTFDM.{env}.BankData.{ts}.parquet")
                         s3_client = boto3.client('s3')
                         s3_client.upload_file(f"/tmp/MTFDM.{env}.BankData.{ts}.parquet", bucket_name, file_path)
-                        
-                        logger.info('Parquet file has been created.')
-                        continue
+                        job_id = get_GlueJob_id()
+                        meta_info.append([job_id,"004",file_name,meta_file_size,"Null",df.shape[0],"COMPLETED",-1])
+                        # df.columns = df.columns.str.lower()
                     else:
-                        logger.info('No records found in mfr_bank_file_vw table.')
+                        print('No records found in de_tpse_payee_dtl table.')
                         stage_error = True
+                else:
+                    print('No records found in mfr_bank_file_vw table.')
+                    stage_error = True
+
+            elif key == "meta" and stage_error == False:
+                meta_cols = ["job_run_id","claim_file_type_cd","claim_file_name","claim_file_size","mfr_id","file_rec_cnt","claim_file_stus_cd","insert_user_id"]
+                meta_df = pd.DataFrame(meta_info, columns=meta_cols)
+                postgres_query("database",schema,table,action="meta",dat=meta_df)
+
     else:
         break
 

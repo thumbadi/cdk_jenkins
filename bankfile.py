@@ -68,7 +68,7 @@ def postgres_query(jdbc_url,mtf_db,schema,table,**kwargs):
     if seq == "execute_sp":
         proc_name = kwargs.get("prcd")    
         conn = psycopg2.connect(
-        dbname=db,
+        dbname=mtf_db,
         user=mtf_secret['username'],
         password=mtf_secret['password'],
         host=host,
@@ -134,12 +134,12 @@ schema_data =  [
     {
     "execute_sp" : {
             "table_name" : "",
-            "schema" : "claim"
+            "schema" : "shared"
     }},
     {
     "read_table" : {
-            "table_name" : "",
-            "schema" : "claim"
+            "table_name" : ["mfr_bank_file_vw","bank_file_dtl"],
+            "schema" : ["mfr", "shared"]
     }},
     {
     "meta" : {
@@ -149,7 +149,7 @@ schema_data =  [
     {
     "execute_sp" : {
             "table_name" : "",
-            "schema" : "claim"
+            "schema" : "shared"
     }}
     ]
 
@@ -181,16 +181,16 @@ for entry in schema_data:
             if key == "execute_sp":
                 proc_list = ["update_boolean_column","update_boolean_no"]
                 if sp_id == 0:
-                    postgres_query("mtf",schema,table,action="execute_sp",prcd=proc_list[0])
+                    postgres_query(jdbc_url,mtf_db,schema,table,action="execute_sp",prcd=proc_list[0])
                     sp_id = 1
                 else:
-                    postgres_query("mtf",schema,table,action="execute_sp",prcd=proc_list[1])
+                    postgres_query(jdbc_url,mtf_db,schema,table,action="execute_sp",prcd=proc_list[1])
                     # sp_id = 2
             elif key == "read_table":
-                tbl_name = ['mfr_bank_file_vw','de_tpse_payee_dtl']
-                view_mfr_df = postgres_query("mtf",schema,tbl_name[0],action="read_table")
+                #tbl_name = ['mfr_bank_file_vw','bank_file_dtl']
+                view_mfr_df = postgres_query(jdbc_url,mtf_db,schema[0],table[0],action="read_table")
                 if view_mfr_df.isEmpty() == False:
-                    view_detpse_df = postgres_query("mtf",schema,tbl_name[1],action="read_table")
+                    view_detpse_df = postgres_query(jdbc_url,mtf_db,schema[1],table[1],action="read_table")
                     if view_detpse_df.isEmpty() == False:
                         merged_df = view_mfr_df.unionByName(view_detpse_df, allowMissingColumns=True)
                         merged_df = merged_df.drop("xfr_req_yn")

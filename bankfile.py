@@ -224,7 +224,7 @@ for entry in schema_data:
                 else:
                     print('No records found in mfr_bank_file_vw table.')
                     stage_error = True
-		    elif key == "update" and stage_error == False:
+	    elif key == "update" and stage_error == False:
                     xfr_req_yn = df_final["xfr_req_yn"]
                     postgres_query(jdbc_url,mtf_db,schema,table,id = xfr_req_yn, action="update")
             elif key == "meta" and stage_error == False:

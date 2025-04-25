@@ -83,7 +83,8 @@ def postgres_query(jdbc_url,mtf_db,schema,table,**kwargs):
     elif seq == "read_table":
         if table == "mfr_bank_file_vw":
             query = f"""
-                    (select * from claim.mfr_bank_file_vw)
+                    (select recordoperation AS "RecordOperation", organizationcode AS "OrganizationCode", payeeid AS "PayeeID", organizationidentifier AS "OrganizationIdentifier", organizationname AS "OrganizationName", organizationlegalname AS "OrganizationLegalName", organizationtin AS "OrganizationTIN", organizationtintype AS "OrganizationTINType", profit_nonprofit AS "Profit-Nonprofit", organizationnpi AS "OrganizationNPI", paymentmode AS "PaymentMode", routingtransitnumber AS "RoutingTransitNumber", accountnumber AS "AccountNumber", accounttype AS "AccountType", effectivestartdate AS "EffectiveStartDate", effectiveenddate AS "EffectiveEndDate", addresscode AS "AddressCode", addressline1 AS "AddressLine1", addressline2 AS "AddressLine2", cityname AS "CityName", state AS "State", postalcode AS "PostalCode", contactcode AS "ContactCode", contactfirstname AS "ContactFirstName", contactlastname AS "ContactLastName", contacttitle AS "ContactTitle", contactphone AS "ContactPhone", contactfax AS "ContactFax", contactotherphone AS "ContactOtherPhone", contactemail AS "ContactEmail"
+            from mfr.mfr_bank_file_vw)
                                 """
         else:
             query = f"""

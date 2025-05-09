@@ -1,5 +1,6 @@
 SELECT *
 FROM claim.mfr_bank_file_vw a
-WHERE a.refresh_ts::timestamp > (
-    SELECT MAX(insert_ts) FROM claim.claim_file_metadata
-);
+WHERE a.refresh_ts::timestamp > COALESCE( 
+(
+    SELECT MAX(insert_ts) FROM claim.claim_file_metadata where claim_file_type_cd = '006'
+),'1900-01-01'::timestamp);

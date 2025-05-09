@@ -75,20 +75,22 @@ def postgres_query(jdbc_url,mtf_db,schema,table,**kwargs):
         port=5432
         )
         conn.autocommit = True
+        cursor = conn.cursor()
         with conn:
             with conn.cursor() as cur:
                 cur.execute(f"CALL {schema}.{proc_name}();")  # Python waits here until it's done
                 print("Stored procedure completed successfully.")
 
     elif seq == "read_table":
-        if table == "mfr_bank_file_vw":
-            query = f"""
-                    (select recordoperation AS "RecordOperation", organizationcode AS "OrganizationCode", payeeid AS "PayeeID", organizationidentifier AS "OrganizationIdentifier", organizationname AS "OrganizationName", organizationlegalname AS "OrganizationLegalName", organizationtin AS "OrganizationTIN", organizationtintype AS "OrganizationTINType", profit_nonprofit AS "Profit-Nonprofit", organizationnpi AS "OrganizationNPI", paymentmode AS "PaymentMode", routingtransitnumber AS "RoutingTransitNumber", accountnumber AS "AccountNumber", accounttype AS "AccountType", effectivestartdate AS "EffectiveStartDate", effectiveenddate AS "EffectiveEndDate", addresscode AS "AddressCode", addressline1 AS "AddressLine1", addressline2 AS "AddressLine2", cityname AS "CityName", state AS "State", postalcode AS "PostalCode", contactcode AS "ContactCode", contactfirstname AS "ContactFirstName", contactlastname AS "ContactLastName", contacttitle AS "ContactTitle", contactphone AS "ContactPhone", contactfax AS "ContactFax", contactotherphone AS "ContactOtherPhone", contactemail AS "ContactEmail"
-            from mfr.mfr_bank_file_vw)
-                                """
-        else:
-            query = f"""
-                    (select * from claim.de_tpse_payee_dtl WHERE xfr_req_yn = true)
+        if table == "bank_file_vw":
+            query = f"""(SELECT 'A' as "RecordOperation", organizationcode as "OrganizationCode", payeeid as "PayeeID", organizationidentifier as "OrganizationIdentifier",
+                        organizationname as "OrganizationName", organizationlegalname as "OrganizationLegalName", organizationtin as "OrganizationTIN",
+                        organizationtintype as "OrganizationTINType", organizationnpi as "OrganizationNPI", profitnonprofit as "ProfitNonprofit", paymentmode as "PaymentMode", 
+                        routingtransitnumber as "RoutingTransitNumber", accountnumber as "AccountNumber", accounttype as "AccountType", effectivestartdate as "EffectiveStartDate", 
+                        effectiveenddate as "EffectiveEndDate", addresscode as "AddressCode", addressline1 as "AddressLine1",addressline2 as "AddressLine2", cityname as "CityName",
+                        state as "State", postalcode as "PostalCode", contactcode as "ContactCode", contactfirstname as "ContactFirstName", contactlastname as "ContactLastName",
+                        contacttitle as "ContactTitle", contactphone as "ContactPhone", contactfax as "ContactFax", contactotherphone as "ContactOtherPhone",
+                        contactemail as "ContactEmail", refresh_ts FROM shared.bank_file_vw)
                                 """
         df = spark.read.format("jdbc") \
             .option("url", f"{jdbc_url}") \
@@ -98,25 +100,7 @@ def postgres_query(jdbc_url,mtf_db,schema,table,**kwargs):
             .option("driver", "org.postgresql.Driver") \
             .load()
         return df
-    elif seq == "update":
-        xfr_req_yn = kwargs.get("id")
     
-        conn = psycopg2.connect(
-        dbname=mtf_db,
-        user=mtf_secret['username'],
-        password=mtf_secret['password'],
-        host=host,
-        port=port
-        )
-        cursor = conn.cursor()
-        
-        query = """
-            UPDATE shared.bank_file_dtl SET xfr_req_yn = FALSE WHERE xfr_req_yn = TRUE
-        """       
-        
-		conn.commit()
-        cursor.close()
-        conn.close()
 def get_secret(secret_name):
     """Fetch secret from AWS Secrets Manager."""
     region_name = "us-east-1"  # Modify if needed
@@ -157,12 +141,7 @@ schema_data =  [
     }},
     {
     "read_table" : {
-            "table_name" : ["mfr_bank_file_vw","bank_file_dtl"],
-            "schema" : ["mfr", "shared"]
-    }},
-	{
-	"update" : {
-            "table_name" : "bank_file_dtl",
+            "table_name" : "bank_file_vw",
             "schema" : "shared"
     }},
     {
@@ -187,9 +166,9 @@ match = re.search(pattern, jdbc_url)
 if match:
     host= match.group(1)
 
-bucket_name = "pyspark"
+bucket_name = s3_bucket
 stage_error = False
-df_final = pd.DataFrame()
+#df_final = pd.DataFrame()
 job_id = None
 meta_info = []
 for entry in schema_data:
@@ -197,37 +176,25 @@ for entry in schema_data:
         for key in entry.keys():        
             schema = entry[key]["schema"]
             table = entry[key]["table_name"]        
-            if key == "execute_sp":
-                storedProc = "update_boolean_true"
-                postgres_query(jdbc_url,mtf_db,schema,table,action="execute_sp",prcd=storedProc)
-            elif key == "read_table":
-                #tbl_name = ['mfr_bank_file_vw','bank_file_dtl']
-                view_mfr_df = postgres_query(jdbc_url,mtf_db,schema[0],table[0],action="read_table")
-                if view_mfr_df.isEmpty() == False:
-                    view_detpse_df = postgres_query(jdbc_url,mtf_db,schema[1],table[1],action="read_table")
-                    if view_detpse_df.isEmpty() == False:
-                        merged_df = view_mfr_df.unionByName(view_detpse_df, allowMissingColumns=True)
-                        merged_df = merged_df.drop("xfr_req_yn")
-                        ts = datetime.datetime.today().strftime("%Y%m%d_%H%M%S")
-                        file_name = f"MTFDM_{env}_BankData_{ts}.parquet"
-                        file_path = f"bankfile/ready/{file_name}"
-                        df = merged_df.toPandas()
-                        df.to_parquet(f"/tmp/{file_name}")
-                        meta_file_size = os.path.getsize(f"/tmp/{file_name}")
-                        s3_client = boto3.client('s3')
-                        s3_client.upload_file(f"/tmp/{file_name}", bucket_name, file_path)
-                        job_id = get_GlueJob_id()
-                        meta_info.append([job_id,"004",file_name,meta_file_size,"Null",df.shape[0],"COMPLETED",-1])
-                        # df.columns = df.columns.str.lower()
-                    else:
-                        print('No records found in de_tpse_payee_dtl table.')
-                        stage_error = True
+            if key == "read_table":
+                view_detpse_df = postgres_query(jdbc_url,mtf_db,schema,table,action="read_table")
+                if view_detpse_df.isEmpty() == False:
+                    df = view_detpse_df.toPandas()
+                    columns_to_remove = ["refresh_ts"]
+                    df_parquet = df.drop(columns=columns_to_remove)
+                    ts = datetime.datetime.today().strftime("%Y%m%d_%H%M%S")
+                    file_name = f"MTFDM_{env}_DMBankData_{ts}.parquet"
+                    file_path = f"bankfile/ready/{file_name}"
+                    df_parquet.to_parquet(f"/tmp/{file_name}")
+                    meta_file_size = os.path.getsize(f"/tmp/{file_name}")
+                    s3_client = boto3.client('s3')
+                    s3_client.upload_file(f"/tmp/{file_name}", bucket_name, file_path)
+                    job_id = get_GlueJob_id()
+                    meta_info.append([job_id,"006",file_name,meta_file_size,"Null",df.shape[0],"COMPLETED",-1])
+                    # df.columns = df.columns.str.lower()
                 else:
-                    print('No records found in mfr_bank_file_vw table.')
+                    print('No records found in de_tpse_payee_dtl table.')
                     stage_error = True
-	    elif key == "update" and stage_error == False:
-                    xfr_req_yn = df_final["xfr_req_yn"]
-                    postgres_query(jdbc_url,mtf_db,schema,table,id = xfr_req_yn, action="update")
             elif key == "meta" and stage_error == False:
                 meta_cols = ["job_run_id","claim_file_type_cd","claim_file_name","claim_file_size","mfr_id","file_rec_cnt","claim_file_stus_cd","insert_user_id"]
                 meta_df = pd.DataFrame(meta_info, columns=meta_cols)

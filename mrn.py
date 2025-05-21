@@ -54,8 +54,8 @@ order by a.mfr_id)
             .option("driver", "org.postgresql.Driver") \
             .load()
         return df
-	if seq == "loctn":
-        query = f"""(select claim_loctn_cd from claim.mtf_claim_msg_loctn_map where claim_msg_cd='051')"""
+     if seq == "loctn":
+        query = f"""(select claim_msg_cd, claim_loctn_cd from claim.mtf_claim_msg_loctn_map)"""
         df = spark.read.format("jdbc") \
             .option("url", f"{jdbc_url}") \
             .option("dbtable", query) \
@@ -78,7 +78,7 @@ null as "MRA_ERR_CD_4", null as "MRA_ERR_CD_5", null as "MRA_ERR_CD_6", null as 
 null as "MRA_ERR_CD_10", null as "MTF_PM_IND", null as "PYMT_MTHD_CD", null as "PYMT_AMT", 
 null as "PYMT_TS", d.mfr_id as "MANUFACTURER_ID", d.mfr_name as "MANUFACTURER_NAME", b.received_id as "RECEIVED_ID"
 from claim.mtf_claim c join  claim.mtf_claim_manufacturer d on d.received_dt = c.received_dt and d.received_id = c.received_id
-	 full outer	join claim.mtf_claim_de_tpse a on a.received_dt = c.received_dt and a.received_id = c.received_id
+	 full outer join claim.mtf_claim_de_tpse a on a.received_dt = c.received_dt and a.received_id = c.received_id
      full outer join  claim.mtf_claim_pricing b on b.received_dt = c.received_dt and b.received_id = c.received_id
 where c.mtf_claim_curr_loctn_cd  = (select claim_loctn_cd from claim.mtf_claim_msg_loctn_map where claim_msg_cd='001')
                             """
@@ -110,7 +110,7 @@ where c.mtf_curr_claim_stus_ref_cd = 'RAF')
         return df
     elif seq == "update":
         id_list = kwargs.get("id")
-    
+    	
         conn = psycopg2.connect(
         dbname=mtf_db,
         user=mtf_secret['username'],
@@ -122,7 +122,7 @@ where c.mtf_curr_claim_stus_ref_cd = 'RAF')
         
         query = """
             UPDATE claim.mtf_claim \
-            SET mtf_curr_claim_stus_ref_cd = 'SNT', update_ts = %s, update_user_id = %s, mrn_process_dt = %s\
+            SET mtf_claim_curr_loctn_cd = %s, update_ts = %s, update_user_id = %s, mrn_process_dt = %s\
             WHERE internal_claim_num = (%s) AND received_dt = %s
         """       
              
@@ -153,14 +153,14 @@ where c.mtf_curr_claim_stus_ref_cd = 'RAF')
         cursor.close()
         conn.close()
 		
-	elif seq == "insert_process_loctn":
+   elif seq == "insert_process_loctn":
 
         df = kwargs.get("dat")
         df = df[["received_dt", "received_id", "mtf_icn"]]
         df["claim_msg_cd"] = "051"
         df["insert_user_id"] = -1
         insert_query = f"""
-            INSERT INTO {schema}.{table} (received_dt, received_id, internal_claim_num, claim_msg_cd, insert_user_id, insert_ts)
+            INSERT INTO {schema}.{table} (received_dt, received_id, internal_claim_num, claim_msg_cd, claim_loctn_cd, insert_user_id, insert_ts)
             VALUES (%s, %s, %s, %s, %s, %s)
         """
         conn = psycopg2.connect(
@@ -224,7 +224,7 @@ schema_data =  [
     "mfr_read" : {
             "table_name" : "mfr_dtl",
             "schema" : "shared"
-    }},    
+    }},
     {
     "read" : {
             "table_name" : "mtf_claim",
@@ -315,7 +315,7 @@ meta_info = []
 utc_now = datetime.utcnow()
 eastern = pytz.timezone('America/New_York')
 utc_minus_4 = pytz.utc.localize(utc_now).astimezone(eastern)
-location_code = postgres_query(jdbc_url,mtf_db,'claim','mtf_claim_msg_loctn_map',action="loctn")
+location_df = postgres_query(jdbc_url,mtf_db,'claim','mtf_claim_msg_loctn_map',action="loctn")
 for entry in schema_data:
     if stage_error == False:
         for key in entry.keys():        
@@ -392,9 +392,8 @@ for entry in schema_data:
                     df = df_filtered.toPandas()
                     df["PROCESS_DT"] = df["PROCESS_DT"].ffill()
                     df['PROCESS_DT'] = pd.to_datetime(df['PROCESS_DT'], errors='coerce').dt.date
-					df['insert_ts'] = insert_ts
-					df['claim_loctn_cd'] = location_code
-                    df = df[df['MEDICARE_SRC_OF_COVERAGE'].notna()]
+		    df['insert_ts'] = insert_ts
+	            df = df[df['MEDICARE_SRC_OF_COVERAGE'].notna()]
                     df = df.sort_values(by="SRVC_PRVDR_ID")
                     columns_to_remove = ["MANUFACTURER_ID","MANUFACTURER_NAME","RECEIVED_ID","DRUG_ID","RECEIVED_DT"]
                     df_parquet = df.drop(columns=columns_to_remove)
@@ -412,16 +411,18 @@ for entry in schema_data:
                             df_final = df
                         else:
                             df_final = pd.concat([df_final,df])
-            elif key == "update":
+            elif key == "update":		    
                 if null_query_output == False:
-                    df_final["update_ts"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+		    location_code = location_df.filter(col("claim_msg_cd") == "051").select("claim_loctn_cd")
+		    df_final["update_ts"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
                     df_final["update_user_id"] = -1
-                    claim_id = df_final[['update_ts','update_user_id','process_dt','mtf_icn','received_dt']].values.tolist()
+		    df_final = df_final.withColumn("claim_loctn_cd", lit(location_code))
+		    claim_id = df_final[['claim_loctn_cd','update_ts','update_user_id','process_dt','mtf_icn','received_dt']].values.tolist()
                     postgres_query(jdbc_url,mtf_db,schema,table,id = claim_id, action="update")
             elif key == "insert_process_msg":
                 if null_query_output == False:
                     postgres_query(jdbc_url,mtf_db,schema,table,action="insert", dat=df_final)
-			elif key == "insert_process_loctn":
+	    elif key == "insert_process_loctn":
                 if null_query_output == False:
                     postgres_query(jdbc_url,mtf_db,schema,table,action="insert", dat=df_final)
             elif key == "meta":

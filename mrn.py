@@ -54,7 +54,7 @@ order by a.mfr_id)
             .option("driver", "org.postgresql.Driver") \
             .load()
         return df
-     if seq == "loctn":
+    if seq == "loctn":
         query = f"""(select claim_msg_cd, claim_loctn_cd from claim.mtf_claim_msg_loctn_map)"""
         df = spark.read.format("jdbc") \
             .option("url", f"{jdbc_url}") \
@@ -80,7 +80,7 @@ null as "PYMT_TS", d.mfr_id as "MANUFACTURER_ID", d.mfr_name as "MANUFACTURER_NA
 from claim.mtf_claim c join  claim.mtf_claim_manufacturer d on d.received_dt = c.received_dt and d.received_id = c.received_id
 	 full outer join claim.mtf_claim_de_tpse a on a.received_dt = c.received_dt and a.received_id = c.received_id
      full outer join  claim.mtf_claim_pricing b on b.received_dt = c.received_dt and b.received_id = c.received_id
-where c.mtf_claim_curr_loctn_cd  = (select claim_loctn_cd from claim.mtf_claim_msg_loctn_map where claim_msg_cd='001')
+where c.mtf_claim_curr_loctn_cd = (select claim_loctn_cd from claim.mtf_claim_msg_loctn_map where claim_msg_cd='001'))
                             """
         elif code == "RAF":
             query = f"""
@@ -141,8 +141,8 @@ where c.mtf_curr_claim_stus_ref_cd = 'RAF')
         df["claim_msg_cd"] = "051"
         df["insert_user_id"] = -1
         insert_query = f"""
-            INSERT INTO {schema}.{table} (received_dt, received_id, internal_claim_num, claim_msg_cd, insert_user_id, insert_ts)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO {schema}.{table} (received_dt, received_id, internal_claim_num, claim_msg_cd, insert_user_id)
+            VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING
         """
         conn = psycopg2.connect(
             dbname=mtf_db, user=mtf_secret['username'], password=mtf_secret['password'], host=host, port=port
@@ -153,24 +153,24 @@ where c.mtf_curr_claim_stus_ref_cd = 'RAF')
         cursor.close()
         conn.close()
 		
-   elif seq == "insert_process_loctn":
-
-        df = kwargs.get("dat")
-        df = df[["received_dt", "received_id", "mtf_icn"]]
-        df["claim_msg_cd"] = "051"
-        df["insert_user_id"] = -1
-        insert_query = f"""
-            INSERT INTO {schema}.{table} (received_dt, received_id, internal_claim_num, claim_msg_cd, claim_loctn_cd, insert_user_id, insert_ts)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """
-        conn = psycopg2.connect(
-            dbname=mtf_db, user=mtf_secret['username'], password=mtf_secret['password'], host=host, port=port
-        )
-        cursor = conn.cursor()
-        cursor.executemany(insert_query, df.values.tolist())
-        conn.commit()
-        cursor.close()
-        conn.close()
+    elif seq == "insert_process_loctn":
+            df = kwargs.get("dat")
+            df = df[["received_dt", "received_id", "mtf_icn"]]
+            df["claim_msg_cd"] = "051"
+            df = df["claim_loctn_cd"]
+            df["insert_user_id"] = -1
+            insert_query = f"""
+                INSERT INTO {schema}.{table} (received_dt, received_id, internal_claim_num, claim_msg_cd, claim_loctn_cd, insert_user_id)
+                VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING
+            """
+            conn = psycopg2.connect(
+                dbname=mtf_db, user=mtf_secret['username'], password=mtf_secret['password'], host=host, port=port
+            )
+            cursor = conn.cursor()
+            cursor.executemany(insert_query, df.values.tolist())
+            conn.commit()
+            cursor.close()
+            conn.close()
         
     elif seq == "meta":
         df = kwargs.get("dat")
@@ -235,16 +235,16 @@ schema_data =  [
             "schema" : "claim"
     }},
     {"insert_process_msg" : {
-        "table_name" : "mtf_claim_process_msg",
-        "schema" : "claim"
+            "table_name" : "mtf_claim_process_msg",
+             "schema" : "claim"
     }},
 	{"insert_process_loctn" : {
-        "table_name" : "mtf_claim_process_loctn",
-        "schema" : "claim"
+            "table_name" : "mtf_claim_process_loctn",
+            "schema" : "claim"
     }},
     {"meta" : {
-        "table_name" : "claim_file_metadata",
-        "schema" : "claim"
+            "table_name" : "claim_file_metadata",
+            "schema" : "claim"
     }}
     ]
 
@@ -391,14 +391,14 @@ for entry in schema_data:
                     file_path = f"mfr-{id_value}/mrn/outbound/{file_name}"
                     df = df_filtered.toPandas()
                     df["PROCESS_DT"] = df["PROCESS_DT"].ffill()
-                    df['PROCESS_DT'] = pd.to_datetime(df['PROCESS_DT'], errors='coerce').dt.date
-		    df['insert_ts'] = insert_ts
-	            df = df[df['MEDICARE_SRC_OF_COVERAGE'].notna()]
+                    #df['PROCESS_DT'] = pd.to_datetime(df['PROCESS_DT'], errors='coerce').dt.date
+                    df['insert_ts'] = insert_ts
+                    #df = df[df['MEDICARE_SRC_OF_COVERAGE'].notna()]
                     df = df.sort_values(by="SRVC_PRVDR_ID")
                     columns_to_remove = ["MANUFACTURER_ID","MANUFACTURER_NAME","RECEIVED_ID","DRUG_ID","RECEIVED_DT"]
                     df_parquet = df.drop(columns=columns_to_remove)
                     df_parquet.columns = df_parquet.columns.str.upper()
-                    df_parquet.to_parquet(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet",schema=mrn_schema)
+                    df_parquet.to_parquet(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet")
                     bucket_name = s3_bucket
                     meta_file_size = os.path.getsize(f"/tmp/{mrn}{mfg_name_value}.{ts}.parquet")
                     s3_client = boto3.client('s3')
@@ -413,18 +413,29 @@ for entry in schema_data:
                             df_final = pd.concat([df_final,df])
             elif key == "update":		    
                 if null_query_output == False:
-		    location_code = location_df.filter(col("claim_msg_cd") == "051").select("claim_loctn_cd")
-		    df_final["update_ts"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                    #location_code = location_df.filter(col("claim_msg_cd") == "051").select("claim_loctn_cd")
+                    #location_code = location_df.loc[location_df["claim_msg_cd"] == "051", "claim_loctn_cd"].iloc[0]
+                    location_code_row = location_df.filter(col("claim_msg_cd") == "051").select("claim_loctn_cd").first()
+                    location_code = location_code_row["claim_loctn_cd"] if location_code_row else None
+                    df_final["update_ts"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
                     df_final["update_user_id"] = -1
-		    df_final = df_final.withColumn("claim_loctn_cd", lit(location_code))
-		    claim_id = df_final[['claim_loctn_cd','update_ts','update_user_id','process_dt','mtf_icn','received_dt']].values.tolist()
+                    df_final['claim_loctn_cd'] = location_code
+                    #df_final = df_final.withColumn("claim_loctn_cd", lit(location_code))
+                    claim_id = df_final[['claim_loctn_cd','update_ts','update_user_id','process_dt','mtf_icn','received_dt']].values.tolist()
                     postgres_query(jdbc_url,mtf_db,schema,table,id = claim_id, action="update")
             elif key == "insert_process_msg":
                 if null_query_output == False:
-                    postgres_query(jdbc_url,mtf_db,schema,table,action="insert", dat=df_final)
-	    elif key == "insert_process_loctn":
+                    #insert_ts = utc_minus_4.strftime("%Y-%m-%d %H:%M:%S")
+                    #df_final['insert_ts'] = insert_ts
+                    postgres_query(jdbc_url,mtf_db,schema,table,action="insert_process_msg", dat=df_final)
+            elif key == "insert_process_loctn":
                 if null_query_output == False:
-                    postgres_query(jdbc_url,mtf_db,schema,table,action="insert", dat=df_final)
+                    
+                    print('df_final*************************')
+                    print(df_final)
+                    print('length***********')# Inspect what’s in it
+                    print(len(df_final)) # See how many items are there
+                    postgres_query(jdbc_url,mtf_db,schema,table,action="insert_process_loctn", dat=df_final)
             elif key == "meta":
                 meta_cols = ["job_run_id","claim_file_type_cd","claim_file_name","claim_file_size","mfr_id","file_rec_cnt","claim_file_stus_cd","insert_user_id","insert_ts"]
                 meta_df = pd.DataFrame(meta_info, columns=meta_cols)

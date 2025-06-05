@@ -1,6 +1,35 @@
-SELECT *
-FROM claim.mfr_bank_file_vw a
-WHERE a.refresh_ts::timestamp > COALESCE( 
-(
-    SELECT MAX(insert_ts) FROM claim.claim_file_metadata where claim_file_type_cd = '006'
-),'1900-01-01'::timestamp);
+CREATE TABLE shared.drug_dtl (
+	mfr_id int8 NULL,
+	drug_id varchar(10) NULL,
+	drug_name varchar(500) NULL,
+	active_ingredient varchar(50000) NULL,
+	drug_dtl_eff_dt date NULL,
+	drug_dtl_end_dt date NULL,
+	insert_user_id int8 NOT NULL,
+	insert_ts timestamp(6) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	update_user_id int8 NULL,
+	update_ts timestamp(6) NULL
+);
+
+CREATE TABLE shared.mfp_dtl (
+
+	ndc_cd varchar(13) NOT NULL,
+	mfp_eff_dt date NULL,
+	mfp_end_dt date NULL,
+	mfp_per_unit numeric(38, 6) NULL,
+	asof_dt date NULL,
+	insert_user_id int8 NOT NULL,
+	insert_ts timestamp(6) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	update_user_id int8 NULL,
+	update_ts timestamp(6) NULL,
+	ipay_year varchar(4) NULL,
+	drug_id varchar(10) NULL,
+	drug_name varchar(500) NULL,
+	active_ingredient varchar(500) NULL,
+	ndc_9 varchar(11) NULL,
+	xref_ndc_11 varchar(100) NULL,
+	mfp_per_30 numeric(38, 6) NULL,
+	mfp_per_pkg numeric(38, 6) NULL,
+	type_of_update varchar(50) NULL,
+	remarks varchar(5000) NULL
+);

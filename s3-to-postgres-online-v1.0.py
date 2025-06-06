@@ -7,14 +7,17 @@ import pandas as pd
 from io import StringIO
 import json
 
-AWS_ACCESS_KEY = ""
-AWS_SECRET_KEY = ""
-AWS_REGION = ""
+
+# --- S3 Config ---
+bucket = 'pyspark-demo12'
+input_dir = "input"
+completed_dir = "completed"
+error_dir = "error"
 
 def get_secret(secret_name):
     """Fetch secret from AWS Secrets Manager."""
     region_name = "us-east-1"  # Modify if needed
-    client = boto3.client('secretsmanager', region_name=region_name)
+    client = boto3.client('secretsmanager')
 
     try:
         # Fetch the secret value
@@ -36,16 +39,15 @@ def get_secret(secret_name):
         print(f"Error retrieving secret: {e}")
         raise e
 
-#read PSV from S3 bucket
-# --- S3 Config ---
-bucket = 'pyspark-demo12'
-key = 'your-file.psv'
+def move_s3_files(source_key,target_key):
+    # Copy the file from input to completed
+    s3.copy_object(Bucket=bucket, CopySource={'Bucket': bucket, 'Key': source_key}, Key=target_key)
+    s3.delete_object(Bucket=bucket, Key=source_key)
+
 
 # --- PostgreSQL Config ---
 
 table_name = 'claim.mfp_dtl'
-prefix = 'PSV/'
-
 db = 'mtf'
 host = "database-1.ch8qiq2uct5o.us-east-1.rds.amazonaws.com"
 secret_name = "rds!db-dcb3ad0e-5246-450e-9f85-44450fccbddb"
@@ -60,9 +62,8 @@ pg_config = {
 }
 
 # --- Read file from S3 ---
-s3 = boto3.client('s3',region_name=AWS_REGION,aws_access_key_id=AWS_ACCESS_KEY,
-                       aws_secret_access_key=AWS_SECRET_KEY)
-response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
+s3 = boto3.client('s3')
+response = s3.list_objects_v2(Bucket=bucket, Prefix=input_dir)
 psv_files = [item['Key'] for item in response.get('Contents', []) if item['Key'].endswith('.psv')]
 
 
@@ -131,9 +132,13 @@ for key in psv_files:
             FROM STDIN WITH (FORMAT csv, DELIMITER '|', NULL '')
         """, buffer)
         conn.commit()
+        fname = key.split("/")[1]
+        move_s3_files(key,f"{completed_dir}/{fname}")
     except Exception as e:
         print("COPY failed:", e)
         conn.rollback()
+        fname = key.split("/")[1]
+        move_s3_files(key,f"{error_dir}/{fname}")
 
     # --- Cleanup ---
     cur.close()

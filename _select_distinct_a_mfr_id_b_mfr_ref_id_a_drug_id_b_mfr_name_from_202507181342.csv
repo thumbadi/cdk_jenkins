@@ -1,0 +1,11 @@
+"mfr_id","mfr_ref_id","drug_id","mfr_name"
+10,M001,D2601,Bristol Myers Squibb
+11,M002,D2602,Immunex Corporation
+12,M003,D2603,Novartis Pharms Corp
+13,M004,D2604,AstraZeneca AB
+14,M009,D2609,"Janssen Biotech, Inc."
+15,M006,D2606,Merck Sharp Dohme
+16,M007,D2607,Boehringer Ingelheim
+17,M008,D2608,Novo Nordisk Inc
+18,M010,D2610,Janssen Pharms
+19,M005,D2605,Pharmacyclics LLC

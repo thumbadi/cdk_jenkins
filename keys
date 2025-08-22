@@ -1,35 +1,57 @@
-CREATE TABLE shared.drug_dtl (
-	mfr_id int8 NULL,
-	drug_id varchar(10) NULL,
-	drug_name varchar(500) NULL,
-	active_ingredient varchar(50000) NULL,
-	drug_dtl_eff_dt date NULL,
-	drug_dtl_end_dt date NULL,
-	insert_user_id int8 NOT NULL,
-	insert_ts timestamp(6) DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	update_user_id int8 NULL,
-	update_ts timestamp(6) NULL
-);
-
-CREATE TABLE shared.mfp_dtl (
-
-	ndc_cd varchar(13) NOT NULL,
-	mfp_eff_dt date NULL,
-	mfp_end_dt date NULL,
-	mfp_per_unit numeric(38, 6) NULL,
-	asof_dt date NULL,
+CREATE TABLE shared.bank_file_dtl (
+	bank_file_dtl_id int8 NOT NULL,
+	org_type varchar(20) NULL,
+	de_id int8 NULL,
+	pymt_tpse_id int8 NULL,
+	payee_id varchar(20) NULL,
+	de_chain_cd varchar(20) NULL,
+	org_name varchar(200) NULL,
+	org_ftin_num varchar(10) NULL,
+	org_ftin_type varchar(3) NULL,
+	profit_nonprofit varchar(2) NULL,
+	pymt_pref_cd varchar(3) NULL,
+	pymt_routing_num varchar(9) NULL,
+	pymt_acct_num varchar(20) NULL,
+	pymt_acct_type varchar(20) NULL,
+	eff_dt date NULL,
+	end_dt date NULL,
+	pymt_adrs_cd varchar(100) NULL,
+	pymt_adrs_line_1 varchar(100) NULL,
+	pymt_adrs_line_2 varchar(100) NULL,
+	pymt_adrs_city varchar(100) NULL,
+	pymt_adrs_state varchar(2) NULL,
+	pymt_adrs_zip_code varchar(10) NULL,
+	contact_first_name varchar(200) NULL,
+	contact_last_name varchar(200) NULL,
+	contact_title varchar(100) NULL,
+	contact_phone_num_1 varchar(20) NULL,
+	contact_phone_num_2 varchar(20) NULL,
+	contact_email_adrs varchar(100) NULL,
+	part_load_yn bool NULL,
+	refresh_ts timestamp NULL,
 	insert_user_id int8 NOT NULL,
 	insert_ts timestamp(6) DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	update_user_id int8 NULL,
 	update_ts timestamp(6) NULL,
-	ipay_year varchar(4) NULL,
-	drug_id varchar(10) NULL,
-	drug_name varchar(500) NULL,
-	active_ingredient varchar(500) NULL,
-	ndc_9 varchar(11) NULL,
-	xref_ndc_11 varchar(100) NULL,
-	mfp_per_30 numeric(38, 6) NULL,
-	mfp_per_pkg numeric(38, 6) NULL,
-	type_of_update varchar(50) NULL,
-	remarks varchar(5000) NULL
+	scenario varchar(20) NULL,
+	payee_int_id varchar(20) NULL,
+	remit_int_id varchar(20) NULL,
+	remit_tpse_id int8 NULL,
+	remit_id varchar(10) NULL
+);
+
+--------------------------
+
+CREATE TABLE shared.bank_feedback_dtl (
+	payee_id varchar(20) NULL,
+	reason_txt varchar(255) NULL,
+	pymt_pref_cd varchar(3) NULL,
+	pymt_acct_num varchar(4) NULL,
+	pymt_routing_num varchar(9) NULL,
+	hold_dt date NULL,
+	release_dt date NULL,
+	insert_user_id int8 NOT NULL,
+	insert_ts timestamp(6) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	update_user_id int8 NULL,
+	update_ts timestamp(6) NULL
 );

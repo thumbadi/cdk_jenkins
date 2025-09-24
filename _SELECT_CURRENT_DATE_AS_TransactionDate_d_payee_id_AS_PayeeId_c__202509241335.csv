@@ -1,0 +1,3 @@
+"TransactionDate","PayeeId","TransactionId","ManufacturerId","DrugId","DispenserId","DisbursementAmount","PaymentCategory","received_dt","received_id"
+2025-09-24,"1306164413","402521300002047",M001,D2601,"1306164413",1276.83,Initial,2025-08-01,2047
+2025-09-24,"1306164413","402521300002047",M001,D2601,"1306164413",1276.83,Initial,2025-08-01,2047

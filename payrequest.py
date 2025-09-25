@@ -1,3 +1,14 @@
+f"""(SELECT 
+                        A.received_dt, 
+                        A.received_id, 
+                        A.transactionid, 
+                        A.payeeid,
+                        B.hold_dt,
+                        B.release_dt
+                    FROM claim.process_id_table A
+                    LEFT JOIN claim.bank_feedback_dtl B 
+                        ON A.payeeid::int8 = B.payee_id::int8)"""
+
 for entry in schema_data:
     if stage_error == False:
         for key in entry.keys():  

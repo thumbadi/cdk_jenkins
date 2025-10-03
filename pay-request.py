@@ -8,6 +8,8 @@ import json
 from functools import reduce
 from awsglue.transforms import *
 from pyspark.sql import SparkSession
+from pyspark.sql.types import DateType, IntegerType, LongType
+from pyspark.sql import functions as F
 from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
@@ -41,12 +43,13 @@ glue_client = boto3.client('glue')
 def postgres_query(jdbc_url,mtf_db,schema,table,**kwargs):    
     seq = kwargs.get("action")
     if seq == "read":
-        
         query = f"""(SELECT
     CURRENT_DATE AS "TransactionDate",
     d.payee_id AS "PayeeId",
+    b.hold_dt, b.release_dt,
     c.internal_claim_num AS "TransactionId",
-    x.mfr_ref_id AS "ManufacturerId",-- <<== replaced drug_id with mfr_ref_id
+    c.update_ts,c.update_user_id,
+    x.mfr_ref_id AS "ManufacturerId",
     c.drug_id AS "DrugId",  
     d.org_id AS "DispenserId",
     p.disb_amt AS "DisbursementAmount",
@@ -65,11 +68,8 @@ JOIN claim.mtf_claim_pymt_request p
     AND c.received_id = p.claim_received_id
 JOIN claim.pymt_category_ref pcr
     ON p.pymt_category_cd = pcr.pymt_category_cd
-INNER JOIN (
-    SELECT m.claim_loctn_cd
-    FROM claim.mtf_claim_msg_loctn_map m
-    WHERE m.claim_msg_cd = '151'
-) l ON c.mtf_claim_curr_loctn_cd = l.claim_loctn_cd
+LEFT JOIN shared.bank_feedback_dtl b 
+ON d.payee_id = b.payee_id
 LEFT JOIN (
     SELECT 
         a.mfr_id, 
@@ -78,7 +78,8 @@ LEFT JOIN (
     FROM shared.drug_dtl a
     LEFT JOIN shared.mfr_dtl b ON a.mfr_id = b.mfr_id
 ) x 
-ON m.mfr_id::text = x.mfr_id::text)"""
+ON m.mfr_id::text = x.mfr_id::text
+where c.mtf_claim_curr_loctn_cd = '041')"""
 
         df = spark.read.format("jdbc") \
                 .option("url", f"{jdbc_url}") \
@@ -90,7 +91,7 @@ ON m.mfr_id::text = x.mfr_id::text)"""
         return df
         
     elif seq == "update":
-        id_list = kwargs.get("id")
+        id_list = kwargs.get("data")
     
         conn = psycopg2.connect(
         dbname=mtf_db,
@@ -116,68 +117,35 @@ ON m.mfr_id::text = x.mfr_id::text)"""
         conn.close()
     
     elif seq == "delete":
-        df = kwargs.get("dat")
-        df = df[["received_dt", "received_id"]]
+        df = kwargs.get("data")
+        #df = df[["received_dt", "received_id", "internal_claim_num"]]
         delete_query = f"""
-            DELETE FROM {schema}.{table} WHERE received_dt=%s AND received_id=%s
+            DELETE FROM {schema}.{table} WHERE internal_claim_num =%s AND received_dt=%s AND received_id=%s
             """
         conn = psycopg2.connect(
             dbname=mtf_db, user=credentials['username'], password=credentials['password'], host=host, port=port
         )
         cursor = conn.cursor()
-        cursor.executemany(delete_query, df.values.tolist())
+        cursor.executemany(delete_query, [tuple(item) for item in df])
         conn.commit()
         cursor.close()
         conn.close() 
         
     elif seq == "insert":
 
-        df = kwargs.get("dat")
-        df = df[["received_dt", "received_id", "TransactionId", "insert_ts"]]
-        df["claim_msg_cd"] = "201"
-        df["insert_user_id"] = -1
-        insert_query = f"""
-            INSERT INTO {schema}.{table} (received_dt, received_id, internal_claim_num, insert_ts, claim_msg_cd, insert_user_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """
-        conn = psycopg2.connect(
-            dbname=mtf_db, user=credentials['username'], password=credentials['password'], host=host, port=port
-        )
-        cursor = conn.cursor()
-        cursor.executemany(insert_query, df.values.tolist())
-        conn.commit()
-        cursor.close()
-        conn.close()
+        df = kwargs.get("data")
+        df.write \
+            .format("jdbc") \
+            .option("url", f"{jdbc_url}") \
+            .option("dbtable", f"{schema}.{table}") \
+            .option("user", credentials['username']) \
+            .option("password", credentials['password']) \
+            .option("driver", "org.postgresql.Driver") \
+            .mode("append") \
+            .save()
         
-    elif seq == "insert2":
-
-        df = kwargs.get("dat")
-        df = df[["received_dt", "received_id", "TransactionId", "insert_ts"]]
-        df["claim_msg_cd"] = "201"
-        df["claim_loctn_cd"] = "050"
-        df["insert_user_id"] = -1
-        df["claim_msg_cd_json"] = df["claim_msg_cd"].apply(lambda x: json.dumps([x]))
-        insert_query = f"""
-            INSERT INTO {schema}.{table} (received_dt, received_id, internal_claim_num, insert_ts, claim_msg_cd, claim_loctn_cd, insert_user_id, claim_msg_cd_json)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """
-        conn = psycopg2.connect(
-            dbname=mtf_db, user=credentials['username'], password=credentials['password'], host=host, port=port
-        )
-        cursor = conn.cursor()
-        #cursor.executemany(insert_query, df.values.tolist())
-        for i, row in enumerate(df.values.tolist()):
-            try:
-                print(f"*************Insert 2 on row {i}: {row}")
-                cursor.execute(insert_query, row)
-            except Exception as e:
-                print(f"*************Error on row {i}: {row}")
-        conn.commit()
-        cursor.close()
-        conn.close()
-
     elif seq == "meta":
-        df = kwargs.get("dat")
+        df = kwargs.get("data")
         insert_query = f"""
             INSERT INTO {schema}.{table} (job_run_id, claim_file_type_cd, claim_file_name, claim_file_size, file_rec_cnt, claim_file_stus_cd, insert_user_id, insert_ts)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -224,13 +192,25 @@ def get_GlueJob_id():
     latest_job_run_id = response['JobRuns'][0]['Id'] if response['JobRuns'] else 'UNKNOWN'
     return latest_job_run_id
 
+def create_and_upload_parquet(data,is_empty):
+    ts = utc_minus_4.strftime("%Y%m%d_%H%M%S")
+    file_name=f"mtfdm_{env}_PaymentRequestData_{ts}.parquet"
+    file_path = f"payrequest/ready/{file_name}"
+    df = data.toPandas()
+    if is_empty:
+        columns_to_remove = ["received_dt","received_id","update_ts","update_user_id","empty_flag",'hold_dt', 'release_dt']
+    else:
+        columns_to_remove = ["received_dt","received_id","update_ts","update_user_id","expired_flag",'hold_dt', 'release_dt']
+    df_parquet = df.drop(columns=columns_to_remove)
+    df_parquet.to_parquet(f"/tmp/{file_name}",schema=payfile_schema)  
+    s3_client = boto3.client('s3')
+    s3_client.upload_file(f"/tmp/{file_name}", bucket_name, file_path)  
+    return file_name
+
+
 schema_data =  [
     {
     "read" : {
-            "table_name" : "mtf_claim",
-            "schema" : "claim"
-    }},
-    {"update" : {
             "table_name" : "mtf_claim",
             "schema" : "claim"
     }},
@@ -239,12 +219,10 @@ schema_data =  [
             "schema" : "claim"
     }},
     {"insert" : {
-        "table_name" : "mtf_claim_process_msg",
-        "schema" : "claim"
-    }},
-    {"insert2" : {
-        "table_name" : "mtf_claim_process_loctn",
-        "schema" : "claim"
+        "table_name1" : "mtf_claim_process_loctn",
+        "schema1" : "claim",
+        "table_name2" : "mtf_claim_process_msg",
+        "schema2" : "claim"
     }},
     {"meta" : {
         "table_name" : "claim_file_metadata",
@@ -286,56 +264,111 @@ utc_now = datetime.utcnow()
 eastern = pytz.timezone('America/New_York')
 utc_minus_4 = pytz.utc.localize(utc_now).astimezone(eastern)
 
+code_mapping = [
+    {"expired": {
+        "claim_msg_cd" : "201",
+        "claim_loctn_cd" : "050"
+    }},
+    {"not_expired":{
+        "claim_msg_cd" : "155",
+        "claim_loctn_cd" : "301"
+    }}
+    ]
 
 for entry in schema_data:
     if stage_error == False:
         for key in entry.keys():        
-            schema = entry[key]["schema"]
-            table = entry[key]["table_name"]        
             bucket_name = s3_bucket
             if key == "read":
+                schema = entry[key]["schema"]
+                table = entry[key]["table_name"]        
                 view_df = postgres_query(jdbc_url,mtf_db,schema,table,action="read")
                 if view_df.isEmpty() == False:
-                    #ts = datetime.datetime.today().strftime("%Y%m%d_%H%M%S")
-                    ts = utc_minus_4.strftime("%Y%m%d_%H%M%S")
-                    file_name=f"mtfdm_{env}_PaymentRequestData_{ts}.parquet"
-                    file_path = f"payrequest/ready/{file_name}"
-                    df = view_df.toPandas()
-                    columns_to_remove = ["received_dt","received_id"]
-                    df_parquet = df.drop(columns=columns_to_remove)
-                    df_parquet.to_parquet(f"/tmp/{file_name}",schema=payfile_schema)
-                    insert_ts = utc_minus_4.strftime("%Y-%m-%d %H:%M:%S")
-                    df['insert_ts'] = insert_ts
-                    meta_file_size = os.path.getsize(f"/tmp/{file_name}")
-                    s3_client = boto3.client('s3')
-                    s3_client.upload_file(f"/tmp/{file_name}", bucket_name, file_path)
-                    df_final = df
-                    job_id = get_GlueJob_id()
-                    meta_info.append([job_id,"008",file_name,meta_file_size,df.shape[0],"COMPLETED",-1,insert_ts])
-                    logger.info('Parquet file has been created.')
-                    continue
+                    df_with_empty_flag = view_df.withColumn("empty_flag",F.when(
+                        ((F.col("release_dt").isNull()) & (F.col("hold_dt").isNull())),
+                        F.lit("Yes")).otherwise(F.lit("No"))
+                        )
+                    df_filtered_empty = df_with_empty_flag.filter(F.col("empty_flag") == "Yes")
+                    if not (df_filtered_empty.isEmpty()):
+                        file_name = create_and_upload_parquet(df_filtered_empty,True)
+                        df = df_filtered_empty.toPandas()
+                        insert_ts = utc_minus_4.strftime("%Y-%m-%d %H:%M:%S")
+                        df['insert_ts'] = insert_ts
+                        meta_file_size = os.path.getsize(f"/tmp/{file_name}")
+                        df_final = df
+                        job_id = get_GlueJob_id()
+                        meta_info.append([job_id,"008",file_name,meta_file_size,df.shape[0],"COMPLETED",-1,insert_ts])
+                        logger.info('Parquet file has been created.')
+                        df['loctn_cd'] = '050'
+                        icn_list = [tuple(map(str, x)) for x in df[['loctn_cd', 'update_ts', 'update_user_id', 'TransactionId', 'received_dt']].values.tolist()]
+                        postgres_query(host,mtf_db,"claim","mtf_claim",action="update",data=icn_list)
+                        continue
                 else:
                     logger.info('No records found in mtf_claim table.')
                     stage_error = True
-            elif key == "update":
-                #if null_query_output == False:
-                    df_final["update_ts"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-                    df_final["update_user_id"] = -1
-                    df_final["mtf_claim_curr_loctn_cd"] = '050'
-                    claim_id = df_final[['mtf_claim_curr_loctn_cd','update_ts','update_user_id','TransactionId','received_dt']].values.tolist()
-                    postgres_query(jdbc_url,mtf_db,schema,table,id = claim_id, action="update")
-            elif key == "delete":
-                postgres_query(jdbc_url,mtf_db,schema,table,action="delete",dat=df_final)
-            elif key == "insert":
-               # if null_query_output == False:
-                    postgres_query(jdbc_url,mtf_db,schema,table,action="insert", dat=df_final)
-            elif key == "insert2":
-               # if null_query_output == False:
-                    postgres_query(jdbc_url,mtf_db,schema,table,action="insert2", dat=df_final)
+            elif key == "insert" and stage_error == False:
+                today = F.current_date()
+                df_with_flag = view_df.withColumn(
+                        "expired_flag",
+                        F.when(F.col("release_dt") <= today, F.lit("Yes"))   # rule 1
+                        .when(F.col("hold_dt") <= today, F.lit("No"))       # rule 2
+                        .otherwise(F.lit("No"))                             # fallback
+                    )
+                for item in code_mapping:
+                    for flag in item.keys():
+                        if flag == "expired":
+                            df_filtered = df_with_flag.filter(F.col("expired_flag") == "Yes")
+                            gen_parquet = True
+                        else:
+                            df_filtered = df_with_flag.filter(F.col("expired_flag") == "No")
+                            gen_parquet = False
+                        if not(df_filtered.isEmpty()):
+                            if gen_parquet:
+                                file_name = create_and_upload_parquet(df_filtered, False)
+                            claim_msg_cd = item.get(flag)["claim_msg_cd"]
+                            claim_loctn_cd = item.get(flag)["claim_loctn_cd"]
+                            df_final = (df_filtered
+                                .withColumn("claim_msg_cd", F.lit(claim_msg_cd))
+                                .withColumn("claim_loctn_cd", F.lit(claim_loctn_cd))
+                                .withColumn("insert_user_id", F.lit(-1))
+                            )
+                            df_final = (df_final.withColumn("received_dt", F.col("received_dt").cast(DateType())))
+                            df_final = df_final.withColumnRenamed("TransactionId", "internal_claim_num")
+                            insert_df = df_final
+                            insert_df.persist()
+                            icn_list = [tuple(map(str, row)) for row in df_final.select("claim_loctn_cd", "update_ts", "update_user_id", "internal_claim_num", "received_dt").collect()]
+                            schema = entry[key]["schema1"]
+                            table = entry[key]["table_name1"] 
+                            postgres_query(host,mtf_db,"claim","mtf_claim",action="update",data=icn_list)
+                            insert_df = insert_df.select(
+                                    "received_dt",
+                                    "received_id",
+                                    "internal_claim_num",
+                                    "claim_msg_cd",
+                                    "claim_loctn_cd",
+                                    "insert_user_id"
+                                )
+                            postgres_query(jdbc_url,mtf_db,schema,table,action="insert", data=insert_df)
+                            table = entry[key]["table_name2"]
+                            schema = entry[key]["schema2"] 
+                            df_msg = insert_df.select(
+                                    "received_dt",
+                                    "received_id",
+                                    "internal_claim_num",
+                                    "claim_msg_cd",
+                                    "insert_user_id"
+                                )
+                            icn_list = [tuple(map(str, row)) for row in df_msg.select("internal_claim_num", "received_dt", "received_id").collect()]
+                            postgres_query(jdbc_url,mtf_db,schema,table,action="delete",data=icn_list)
+                            postgres_query(jdbc_url,mtf_db,schema,table,action="insert", data=df_msg)
+                        else:
+                            print(f"No Records are found in {flag}")
             elif key == "meta":
+                schema = entry[key]["schema"]
+                table = entry[key]["table_name"]
                 meta_cols = ["job_run_id","claim_file_type_cd","claim_file_name","claim_file_size","file_rec_cnt","claim_file_stus_cd","insert_user_id","insert_ts"]
                 meta_df = pd.DataFrame(meta_info, columns=meta_cols)
-                postgres_query(jdbc_url,mtf_db,schema,table,action="meta",dat=meta_df)
+                postgres_query(jdbc_url,mtf_db,schema,table,action="meta",data=meta_df)
     else:
         break
 

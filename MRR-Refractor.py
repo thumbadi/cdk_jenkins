@@ -65,7 +65,7 @@ order by a.mfr_id)
             .load()
         return df
     elif seq == "read":
-        if code == "MRR":
+        if code == "MRR-083":
             query = f"""(select c.internal_claim_num as "MTF_ICN", c.xref_internal_claim_num as "MTF_XREF_ICN", c.received_dt as "RECEIVED_DT", c.mrn_process_dt as "PROCESS_DT",
     '200' as "TRANSACTION_CD", c.medicare_src_of_coverage as "MEDICARE_SRC_OF_COVERAGE", c.srvc_dt as "SRVC_DT",
     c.rx_srvc_ref_num as "RX_SRVC_REF_NUM", coalesce(c.fill_num,'0') as "FILL_NUM", '01' as "SRVC_PRVDR_ID_QUALIFIER", c.srvc_npi_num::varchar as "SRVC_PRVDR_ID",
@@ -83,7 +83,7 @@ order by a.mfr_id)
          join claim.mtf_claim_pymt_response g on g.claim_received_dt = c.received_dt and g.claim_received_id = c.received_id
          join claim.mtf_claim_mra e on e.claim_received_dt = c.received_dt and e.claim_received_id = c.received_id
                    and (e.mra_received_dt, e.mra_received_id) in (select max(mra_received_dt), max(mra_received_id) from claim.mtf_claim_mra f where e.claim_received_dt = f.claim_received_dt and e.claim_received_id = f.claim_received_id)
-                   where c.mtf_claim_curr_loctn_cd in ('083', '087') AND array_position(ARRAY[
+                   where c.mtf_claim_curr_loctn_cd = '083' AND array_position(ARRAY[
         c.mrn_process_dt::text,
         c.internal_claim_num::text,
         c.medicare_src_of_coverage::text,
@@ -105,6 +105,45 @@ order by a.mfr_id)
         g.sort_key::text
       ], NULL) IS NULL)
                             """
+        elif code == "MRR-087":
+            query = f"""(select c.internal_claim_num as "MTF_ICN", c.xref_internal_claim_num as "MTF_XREF_ICN", c.received_dt as "RECEIVED_DT", c.mrn_process_dt as "PROCESS_DT",
+    '200' as "TRANSACTION_CD", c.medicare_src_of_coverage as "MEDICARE_SRC_OF_COVERAGE", c.srvc_dt as "SRVC_DT",
+    c.rx_srvc_ref_num as "RX_SRVC_REF_NUM", coalesce(c.fill_num,'0') as "FILL_NUM", '01' as "SRVC_PRVDR_ID_QUALIFIER", c.srvc_npi_num::varchar as "SRVC_PRVDR_ID",
+    c.prescriber_id as "PRESCRIBER_ID", c.ndc_cd as "NDC_CD", c.drug_id as "DRUG_ID", c.quantity_dispensed as "QUANTITY_DISPENSED",
+    c.days_supply  as "DAYS_SUPPLY", c.indicator_340b_yn as "SEC_340B_IND", c.orig_submitting_contract_num as "SUBMT_CONTRACT", c.mtf_claim_curr_loctn_cd as "LOCATION_CD", b.wac_amt as "WAC", b.mfp_amt as "MFP",
+    b.sdra_amt as "SDRA", case when a.pymt_pref = 'Check' then 'CHK' when a.pymt_pref = 'ELEC' then 'ACH' when a.pymt_pref = 'ELCTRNC' then 'ACH'  when a.pymt_pref = 'EFT' then 'ACH' else null end as "SRVC_PRVDR_PYMT_PREF", b.prev_ndc_cd as "PREV_NDC_CD", b.prev_rfnd_amt as "PREV_PYMT_AMT", b.prev_rfnd_pymt_dt as "PREV_PYMT_DT", b.prev_quantity_dispensed as "PREV_PYMT_QUANTITY", b.prev_rfnd_calc_mthd_cd as "PREV_PYMT_MTHD_CD",
+    e.mra_error_cd_1 as "MRA_ERR_CD_1", e.mra_error_cd_2 as "MRA_ERR_CD_2", e.mra_error_cd_3 as "MRA_ERR_CD_3", e.mra_error_cd_4 as "MRA_ERR_CD_4", e.mra_error_cd_5 as "MRA_ERR_CD_5",
+    e.mra_error_cd_6 as "MRA_ERR_CD_6", e.mra_error_cd_7 as "MRA_ERR_CD_7", e.mra_error_cd_8 as "MRA_ERR_CD_8", e.mra_error_cd_9 as "MRA_ERR_CD_9", e.mra_error_cd_10 as "MRA_ERR_CD_10",
+    e.mra_mtfpm_yn as "MTF_PM_IND", e.mra_rfnd_calc_mthd_cd as "PYMT_MTHD_CD", e.mra_rfnd_amt as "PYMT_AMT", e.mra_rfnd_dt as "PYMT_RPT_DT", e.mra_rfnd_ts as "PYMT_RPT_TIME", e.mra_received_dt as "MRA_RECEIPT_DT", 
+    CURRENT_DATE::DATE as "CLAIM_FINAL_DT", CAST(NULL AS NUMERIC(11,2)) as "PYMT_NET_AMT", CAST(NULL AS NUMERIC(11,2)) as "PYMT_CREDIT", CAST(NULL AS NUMERIC(11,2)) as "CREDIT_BAL", CAST(NULL AS NUMERIC(11,2)) as "PYMT_MONIES", null as "EFT_NUM", CAST(NULL AS DATE) as "EFT_DT", CAST(NULL AS DATE) as "PYMT_PM_DT", CAST(NULL AS integer) as "SORT_KEY", d.mfr_id as "MANUFACTURER_ID", h.mfr_ref_id as "MFR_REF_ID", d.mfr_name as "MANUFACTURER_NAME", b.received_id as "RECEIVED_ID"
+    from claim.mtf_claim c join claim.mtf_claim_manufacturer d on d.received_dt = c.received_dt and d.received_id = c.received_id
+         join shared.mfr_dtl h on h.mfr_id = d.mfr_id::bigint
+         join claim.mtf_claim_de_tpse a on a.received_dt = c.received_dt and a.received_id = c.received_id
+         join claim.mtf_claim_pricing b on b.received_dt = c.received_dt and b.received_id = c.received_id
+         join claim.mtf_claim_mra e on e.claim_received_dt = c.received_dt and e.claim_received_id = c.received_id
+                   and (e.mra_received_dt, e.mra_received_id) in (select max(mra_received_dt), max(mra_received_id) from claim.mtf_claim_mra f where e.claim_received_dt = f.claim_received_dt and e.claim_received_id = f.claim_received_id)
+                   where c.mtf_claim_curr_loctn_cd = '087' AND array_position(ARRAY[
+        c.mrn_process_dt::text,
+        c.internal_claim_num::text,
+        c.medicare_src_of_coverage::text,
+        c.srvc_dt::text,
+        c.rx_srvc_ref_num::text,
+        c.fill_num::text,
+        c.srvc_npi_num::text,
+        c.prescriber_id::text,
+        c.ndc_cd::text,
+        c.drug_id::text,
+        c.quantity_dispensed::text,
+        c.days_supply::text,
+        c.orig_submitting_contract_num::text,
+        b.mfp_amt::text,
+        e.mra_mtfpm_yn::text,
+        e.mra_rfnd_calc_mthd_cd::text,
+        e.mra_rfnd_amt::text,
+        e.mra_received_dt::text
+      ], NULL) IS NULL)
+                            """
+                            
         df = spark.read.format("jdbc") \
             .option("url", f"{jdbc_url}") \
             .option("dbtable", query) \
@@ -113,7 +152,74 @@ order by a.mfr_id)
             .option("driver", "org.postgresql.Driver") \
             .load()
         return df
-    
+        
+    elif seq == "update":
+        id_list = kwargs.get("id")
+    	
+        conn = psycopg2.connect(
+        dbname=mtf_db,
+        user=mtf_secret['username'],
+        password=mtf_secret['password'],
+        host=host,
+        port=port
+        )
+        cursor = conn.cursor()
+        
+        query = """
+            UPDATE claim.mtf_claim \
+            SET mtf_claim_curr_loctn_cd = %s, update_ts = %s, update_user_id = %s, mrn_process_dt = %s\
+            WHERE internal_claim_num = (%s) AND received_dt = %s
+        """       
+             
+        if id_list:  # Prevent empty execution
+            cursor.executemany(query,[tuple(item) for item in id_list])
+
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+    elif seq == "insert_process_msg":
+        df = kwargs.get("dat")
+        df = df[["received_dt", "received_id", "mtf_icn", "insert_ts", "location_cd"]]
+        mapping = {"083": "301", "087": "310"}
+        df["claim_msg_cd"] = df["location_cd"].map(mapping)
+        df["insert_user_id"] = -1
+        insert_query = f"""
+            INSERT INTO {schema}.{table} (received_dt, received_id, internal_claim_num, insert_ts, claim_msg_cd, insert_user_id)
+            VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING
+        """
+        conn = psycopg2.connect(
+            dbname=mtf_db, user=mtf_secret['username'], password=mtf_secret['password'], host=host, port=port
+        )
+        cursor = conn.cursor()
+        data = list(df[['received_dt','received_id','mtf_icn','insert_ts','claim_msg_cd','insert_user_id']].itertuples(index=False, name=None))
+        cursor.executemany(insert_query, data)
+        conn.commit()
+        cursor.close()
+        conn.close()
+		
+    elif seq == "insert_process_loctn":
+        df = kwargs.get("dat")
+        df = df[["received_dt", "received_id", "mtf_icn", "claim_loctn_cd", "insert_ts", "location_cd"]]
+        mapping = {"083": "301", "087": "310"}
+        df["claim_msg_cd"] = df["location_cd"].map(mapping)
+        df["insert_user_id"] = -1
+        df["claim_msg_cd_json"] = df["claim_msg_cd"].apply(lambda x: json.dumps([x]))
+        insert_query = f"""
+            INSERT INTO {schema}.{table} (received_dt, received_id, internal_claim_num, claim_loctn_cd, insert_ts, claim_msg_cd, insert_user_id, claim_msg_cd_json)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING
+        """
+        conn = psycopg2.connect(
+            dbname=mtf_db, user=mtf_secret['username'], password=mtf_secret['password'], host=host, port=port
+        )
+        cursor = conn.cursor()
+        data = list(df[['received_dt','received_id','mtf_icn','claim_loctn_cd','insert_ts','claim_msg_cd','insert_user_id','claim_msg_cd_json']].itertuples(index=False, name=None))
+        cursor.executemany(insert_query, data)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
     elif seq == "meta":
         df = kwargs.get("dat")
         insert_query = f"""
@@ -137,7 +243,7 @@ def set_claim_location(icn_list, msg_code_list, conn):
         logger.info(f"Setting claim location for {len(icn_list)} ICNs with message codes: {msg_code_list}")
         with conn.cursor() as cursor:
             cursor.execute("CALL claim.update_claim_msg_loctn(%s::text[], %s::text[])", (icn_list, msg_code_list))
-        
+
 def get_secret(secret_name):
     """Fetch secret from AWS Secrets Manager."""
     region_name = "us-east-1"  # Modify if needed
@@ -291,7 +397,7 @@ for entry in schema_data:
                 mfr_codes = {f"{row['mfr_name']}_{row['drug_id']}": {"mfr_id" : row["mfr_id"], "drug_id" : row['drug_id'], "mfr_ref_id" : row['mfr_ref_id']} for row in mfr_dtl.collect()}
 
             elif key == "read":
-                seq = ["MRR"]
+                seq = ["MRR-083", "MRR-087"]
                 for status in seq:
                     tmp_mfg_result = postgres_query(jdbc_url,mtf_db,schema,table,action="read",code = status)
 
@@ -354,6 +460,8 @@ for entry in schema_data:
                         df_final[['claim_loctn_cd','update_ts','update_user_id','process_dt','mtf_icn','received_dt']]
                         .itertuples(index=False, name=None)
                     )
+                    #claim_id = df_final[['claim_loctn_cd','update_ts','update_user_id','process_dt','mtf_icn','received_dt']].values.tolist()
+                    #claim_id = len(claim_id)
                     postgres_query(jdbc_url,mtf_db,schema,table,id = params, action="update")
                     logger.info("%d records are updated with mtf_claim_curr_loctn_cd in mtf_claim table.", len(params))
             elif key == "insert_process_msg":
@@ -375,4 +483,3 @@ for entry in schema_data:
         break
 
 job.commit()
-
